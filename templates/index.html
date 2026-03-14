@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>denama-jeevtham</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="app-shell">
+        <header class="topbar">
+            <div class="header-row">
+                <div class="title-group">
+                    <p class="brand-kicker">denama-jeevtham</p>
+                    <h1>Build software projects fast</h1>
+                </div>
+
+                <div class="header-actions">
+                    <button id="history-button" class="header-button" type="button">History</button>
+                    <button id="new-chat-button" class="new-chat-button" type="button">New Chat</button>
+                </div>
+            </div>
+
+            <div class="mode-bar" role="tablist" aria-label="Assistant modes">
+                <button class="mode-button active" type="button" data-mode="plan">Plan</button>
+                <button class="mode-button" type="button" data-mode="code">Code</button>
+                <button class="mode-button" type="button" data-mode="fix">Fix</button>
+                <button class="mode-button" type="button" data-mode="refactor">Refactor</button>
+            </div>
+        </header>
+
+        <section id="history-panel" class="history-panel" hidden>
+            <div class="history-panel-header">
+                <h2>Chat History</h2>
+                <p>Select any previous conversation to continue it.</p>
+            </div>
+            <div id="history-list" class="history-list"></div>
+        </section>
+
+        <section id="chat-box" class="chat-box" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+            <label class="sr-only" for="user-input">Ask denama-jeevtham to build a project</label>
+            <textarea id="user-input" rows="1" placeholder="Describe the app, website, API, bug, or refactor you want help with..."></textarea>
+            <button id="send-button" type="submit">Send</button>
+        </form>
+
+        <p id="helper-text" class="helper-text">Enter to send, Shift+Enter for a new line.</p>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
