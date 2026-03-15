@@ -1,3 +1,4 @@
+const appLayout = document.querySelector(".app-layout");
 const chatForm = document.getElementById("chat-form");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
@@ -6,14 +7,45 @@ const helperText = document.getElementById("helper-text");
 const modeButtons = document.querySelectorAll(".mode-button");
 const newChatButton = document.getElementById("new-chat-button");
 const historyButton = document.getElementById("history-button");
-const historyPanel = document.getElementById("history-panel");
 const historyList = document.getElementById("history-list");
+const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+const activeModeLabel = document.getElementById("active-mode-label");
+const sessionCountLabel = document.getElementById("session-count-label");
+const characterCount = document.getElementById("character-count");
+const draftStateLabel = document.getElementById("draft-state-label");
+const scrollToBottomButton = document.getElementById("scroll-to-bottom-button");
+const promptShortcuts = document.querySelectorAll(".prompt-shortcut, .mini-chip");
 
 const LEGACY_HISTORY_STORAGE_KEY = "denama-jeevtham-chat-history-v1";
 const SESSIONS_STORAGE_KEY = "denama-jeevtham-chat-sessions-v1";
 const ACTIVE_SESSION_STORAGE_KEY = "denama-jeevtham-active-session-v1";
 const MODE_STORAGE_KEY = "denama-jeevtham-chat-mode-v1";
 const MAX_HISTORY_ITEMS = 16;
+const mobileSidebarQuery = window.matchMedia("(max-width: 960px)");
+const SEND_ICON = "↑";
+
+const MODE_META = {
+    plan: {
+        label: "Plan mode",
+        helper: "Map the product, milestones, stack, and rollout before writing code.",
+        placeholder: "Plan a product, workflow, or architecture...",
+    },
+    code: {
+        label: "Code mode",
+        helper: "Ask for implementation steps, files, and production-ready code.",
+        placeholder: "Describe the app, stack, and features you want built...",
+    },
+    fix: {
+        label: "Fix mode",
+        helper: "Share the bug, error, or broken behavior you need to debug.",
+        placeholder: "Paste the bug, error message, or broken flow...",
+    },
+    refactor: {
+        label: "Refactor mode",
+        helper: "Improve structure, readability, or performance without changing behavior.",
+        placeholder: "Describe what needs cleanup or restructuring...",
+    },
+};
 
 let activeMode = localStorage.getItem(MODE_STORAGE_KEY) || "code";
 let chatSessions = loadChatSessions();
@@ -103,6 +135,27 @@ function formatTimestamp(timestamp) {
     }
 }
 
+function isMobileSidebar() {
+    return mobileSidebarQuery.matches;
+}
+
+function openSidebar() {
+    if (!isMobileSidebar()) {
+        return;
+    }
+    appLayout.classList.add("sidebar-open");
+    sidebarBackdrop.hidden = false;
+}
+
+function closeSidebar() {
+    if (!isMobileSidebar()) {
+        sidebarBackdrop.hidden = true;
+        return;
+    }
+    appLayout.classList.remove("sidebar-open");
+    sidebarBackdrop.hidden = true;
+}
+
 function removeSession(sessionId) {
     const sessionIndex = chatSessions.findIndex((session) => session.id === sessionId);
     if (sessionIndex === -1) {
@@ -123,6 +176,7 @@ function removeSession(sessionId) {
     persistSessions();
     renderHistoryList();
     renderConversation();
+    updateSessionCountLabel();
     helperText.textContent = "Chat removed successfully.";
 }
 
@@ -142,7 +196,7 @@ function renderHistoryList() {
             <div class="history-item-row">
                 <button type="button" class="history-item-copy">
                     <span class="history-title">${escapeHtml(session.title || "New chat")}</span>
-                    <span class="history-meta">${escapeHtml((session.mode || "code").toUpperCase())} - ${escapeHtml(formatTimestamp(session.updatedAt || Date.now()))}</span>
+                    <span class="history-meta">${escapeHtml((session.mode || "code").toUpperCase())} | ${escapeHtml(formatTimestamp(session.updatedAt || Date.now()))}</span>
                 </button>
                 <button type="button" class="history-delete-button">Delete</button>
             </div>
@@ -157,7 +211,7 @@ function renderHistoryList() {
             persistSessions();
             renderHistoryList();
             renderConversation();
-            historyPanel.hidden = true;
+            closeSidebar();
             helperText.textContent = "Loaded a previous chat. Enter to send, Shift+Enter for a new line.";
             userInput.focus();
         });
@@ -175,6 +229,25 @@ function renderHistoryList() {
     });
 }
 
+function updateSessionCountLabel() {
+    const count = chatSessions.length;
+    if (!sessionCountLabel) {
+        return;
+    }
+    sessionCountLabel.textContent = `${count} saved chat${count === 1 ? "" : "s"}`;
+}
+
+function applyModeMeta(mode) {
+    const meta = MODE_META[mode] || MODE_META.code;
+    if (activeModeLabel) {
+        activeModeLabel.textContent = meta.label;
+    }
+    userInput.placeholder = meta.placeholder;
+    if (!sendButton.disabled) {
+        helperText.textContent = meta.helper;
+    }
+}
+
 function setActiveMode(mode) {
     activeMode = mode;
     localStorage.setItem(MODE_STORAGE_KEY, mode);
@@ -187,11 +260,31 @@ function setActiveMode(mode) {
     session.updatedAt = Date.now();
     persistSessions();
     renderHistoryList();
+    updateSessionCountLabel();
+    applyModeMeta(mode);
 }
 
 function autoResizeTextarea() {
     userInput.style.height = "auto";
     userInput.style.height = `${Math.min(userInput.scrollHeight, 220)}px`;
+}
+
+function updateDraftIndicators() {
+    const length = userInput.value.trim().length;
+    if (characterCount) {
+        characterCount.textContent = `${length} chars`;
+    }
+    if (!draftStateLabel || sendButton.disabled) {
+        return;
+    }
+
+    if (length > 0) {
+        draftStateLabel.textContent = "Draft in progress";
+        draftStateLabel.classList.add("is-dirty");
+    } else {
+        draftStateLabel.textContent = "Ready to send";
+        draftStateLabel.classList.remove("is-dirty");
+    }
 }
 
 function escapeHtml(text) {
@@ -329,15 +422,28 @@ function renderMarkdown(text) {
     return parts.join("");
 }
 
-function scrollChatToBottom() {
-    chatBox.scrollTop = chatBox.scrollHeight;
+function scrollChatToBottom(force = false) {
+    const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 160;
+    if (force || nearBottom) {
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+    updateScrollButton();
+}
+
+function updateScrollButton() {
+    if (!scrollToBottomButton) {
+        return;
+    }
+    const hasOverflow = chatBox.scrollHeight > chatBox.clientHeight + 80;
+    const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 180;
+    scrollToBottomButton.hidden = !hasOverflow || nearBottom;
 }
 
 function addCodeCopyButtons(container) {
     const codeBlocks = container.querySelectorAll("pre");
     codeBlocks.forEach((pre) => {
         const code = pre.querySelector("code");
-        if (!code) {
+        if (!code || pre.parentElement?.classList.contains("code-block")) {
             return;
         }
 
@@ -389,7 +495,7 @@ function createMessage(role, text, options = {}) {
     const article = document.createElement("article");
     article.className = `message ${role}${options.isError ? " is-error" : ""}${options.isTyping ? " typing" : ""}`;
 
-    const avatarText = role === "user" ? "You" : "LC";
+    const avatarText = role === "user" ? "You" : "AI";
     const labelText = role === "user" ? "You" : "denama-jeevtham";
 
     article.innerHTML = `
@@ -408,16 +514,59 @@ function createMessage(role, text, options = {}) {
     }
 
     chatBox.appendChild(article);
-    scrollChatToBottom();
+    scrollChatToBottom(true);
     return article;
 }
 
-function getWelcomeMessage() {
-    return [
-        "Describe what you want to build.",
-        "",
-        "denama-jeevtham can help with apps, websites, games, tools, APIs, dashboards, debugging, and refactoring.",
-    ].join("\n");
+function getWelcomeMarkup() {
+    return `
+        <section class="welcome-screen">
+            <div class="welcome-card">
+                <h2>How can I help you build today?</h2>
+                <p>
+                    denama-jeevtham is tuned for planning, coding, debugging, and refactoring software projects.
+                    Start with a product idea, feature request, bug, or full-stack build prompt.
+                </p>
+                <div class="welcome-grid">
+                    <button class="welcome-chip" type="button" data-prompt="Build a modern task manager web app with Flask, SQLite, and a clean dashboard UI.">
+                        <span class="welcome-chip-title">Build</span>
+                        <span class="welcome-chip-copy">Create a full app with files, stack, and run steps.</span>
+                    </button>
+                    <button class="welcome-chip" type="button" data-prompt="Plan an AI portfolio website with sections, features, pages, and launch steps.">
+                        <span class="welcome-chip-title">Plan</span>
+                        <span class="welcome-chip-copy">Break down architecture, features, and roadmap.</span>
+                    </button>
+                    <button class="welcome-chip" type="button" data-prompt="Fix this JavaScript bug and explain the root cause clearly before changing the code.">
+                        <span class="welcome-chip-title">Fix</span>
+                        <span class="welcome-chip-copy">Debug problems and return exact code changes.</span>
+                    </button>
+                    <button class="welcome-chip" type="button" data-prompt="Refactor a Flask app into cleaner modules, services, and templates without changing behavior.">
+                        <span class="welcome-chip-title">Refactor</span>
+                        <span class="welcome-chip-copy">Improve structure while keeping the output stable.</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function applyPrompt(prompt) {
+    userInput.value = prompt || "";
+    autoResizeTextarea();
+    updateDraftIndicators();
+    userInput.focus();
+}
+
+function bindPromptButtons(scope = document) {
+    scope.querySelectorAll(".welcome-chip, .prompt-shortcut, .mini-chip").forEach((button) => {
+        if (button.dataset.bound === "true") {
+            return;
+        }
+        button.dataset.bound = "true";
+        button.addEventListener("click", () => {
+            applyPrompt(button.dataset.prompt || "");
+        });
+    });
 }
 
 function renderConversation() {
@@ -425,21 +574,32 @@ function renderConversation() {
     const session = ensureActiveSession();
 
     if (!session.messages.length) {
-        createMessage("assistant", getWelcomeMessage());
+        chatBox.innerHTML = getWelcomeMarkup();
+        bindPromptButtons(chatBox);
+        updateScrollButton();
         return;
     }
 
     session.messages.forEach((item) => {
         createMessage(item.role, item.content);
     });
+    updateScrollButton();
 }
 
 function setLoadingState(isLoading) {
     sendButton.disabled = isLoading;
-    sendButton.textContent = isLoading ? "Thinking..." : "Send";
-    helperText.textContent = isLoading
-        ? `Working in ${activeMode} mode...`
-        : "Enter to send, Shift+Enter for a new line.";
+    sendButton.textContent = isLoading ? "..." : SEND_ICON;
+
+    if (isLoading) {
+        helperText.textContent = `Working in ${activeMode} mode...`;
+        if (draftStateLabel) {
+            draftStateLabel.textContent = "Generating reply";
+            draftStateLabel.classList.remove("is-dirty");
+        }
+    } else {
+        applyModeMeta(activeMode);
+        updateDraftIndicators();
+    }
 }
 
 function startNewChat() {
@@ -449,10 +609,12 @@ function startNewChat() {
     persistSessions();
     renderHistoryList();
     renderConversation();
-    historyPanel.hidden = true;
+    updateSessionCountLabel();
+    closeSidebar();
     helperText.textContent = "Started a new chat. Enter to send, Shift+Enter for a new line.";
     userInput.value = "";
     autoResizeTextarea();
+    updateDraftIndicators();
     userInput.focus();
 }
 
@@ -472,11 +634,17 @@ async function sendMessage(message) {
     session.updatedAt = Date.now();
     persistSessions();
     renderHistoryList();
+    updateSessionCountLabel();
+    if (chatBox.querySelector(".welcome-screen")) {
+        chatBox.innerHTML = "";
+    }
     createMessage("user", trimmedMessage);
 
     userInput.value = "";
     autoResizeTextarea();
+    updateDraftIndicators();
     setLoadingState(true);
+    closeSidebar();
 
     const typingMessage = createMessage("assistant", "", { isTyping: true });
 
@@ -497,7 +665,12 @@ async function sendMessage(message) {
         typingMessage.remove();
 
         if (!response.ok) {
-            createMessage("assistant", data.error || "Something went wrong while generating the response.", { isError: true });
+            const errorParts = [data.error || "Something went wrong while generating the response."];
+            if (data.details) {
+                errorParts.push(`Details: ${data.details}`);
+            }
+            createMessage("assistant", errorParts.join("\n\n"), { isError: true });
+            updateScrollButton();
             return;
         }
 
@@ -511,12 +684,13 @@ async function sendMessage(message) {
         typingMessage.remove();
         createMessage(
             "assistant",
-            "The request could not be completed. Check the Flask server and Gemini API configuration, then try again.",
+            "The request could not be completed. Check the Flask server and API configuration, then try again.",
             { isError: true },
         );
     } finally {
         setLoadingState(false);
         userInput.focus();
+        updateScrollButton();
     }
 }
 
@@ -525,7 +699,10 @@ chatForm.addEventListener("submit", async (event) => {
     await sendMessage(userInput.value);
 });
 
-userInput.addEventListener("input", autoResizeTextarea);
+userInput.addEventListener("input", () => {
+    autoResizeTextarea();
+    updateDraftIndicators();
+});
 
 userInput.addEventListener("keydown", async (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -545,11 +722,44 @@ newChatButton.addEventListener("click", () => {
 });
 
 historyButton.addEventListener("click", () => {
-    historyPanel.hidden = !historyPanel.hidden;
+    if (appLayout.classList.contains("sidebar-open")) {
+        closeSidebar();
+    } else {
+        openSidebar();
+    }
 });
+
+sidebarBackdrop.addEventListener("click", () => {
+    closeSidebar();
+});
+
+mobileSidebarQuery.addEventListener("change", () => {
+    closeSidebar();
+});
+
+chatBox.addEventListener("scroll", () => {
+    updateScrollButton();
+});
+
+if (scrollToBottomButton) {
+    scrollToBottomButton.addEventListener("click", () => {
+        scrollChatToBottom(true);
+    });
+}
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+        closeSidebar();
+    }
+});
+
+bindPromptButtons();
 
 const initialSession = ensureActiveSession();
 setActiveMode(initialSession.mode || activeMode);
 renderHistoryList();
 renderConversation();
 autoResizeTextarea();
+updateDraftIndicators();
+updateSessionCountLabel();
+closeSidebar();
