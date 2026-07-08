@@ -1,205 +1,120 @@
-# denama-jeevtham
+# ByteBuddy – Your Intelligent Developer Companion
 
-`denama-jeevtham` is a Flask-based AI software-building assistant powered by the Groq Chat Completions API. It is designed to feel closer to a modern coding assistant than a basic chatbot, with focused project-building responses, mode switching, session history, code-block copy support, and continuation handling for long answers.
+> Build Faster. Learn Better. Debug Smarter.
 
-## What This Project Does
-
-This app helps users:
-
-- plan software projects
-- generate code and project files
-- fix bugs
-- refactor existing ideas or code structures
-- continue follow-up conversations with saved chat history
-
-The assistant currently supports four working modes:
-
-- `Plan`
-- `Code`
-- `Fix`
-- `Refactor`
-
-It also stores chat sessions in the browser so older conversations can be reopened from the chat history panel.
+ByteBuddy is a production-quality AI Developer Assistant designed for software engineers. It provides a clean, enterprise-grade interface for interacting with LLMs via Ollama or OpenRouter, with features specifically tailored for developer workflows.
 
 ## Features
 
-- Clean chat-style interface
-- Session-based chat history
-- `New Chat` support
-- Mode switching for different types of software work
-- Markdown rendering for headings, lists, quotes, and code blocks
-- Copy buttons for each generated code block
-- Automatic continuation when the model cuts off long responses
-- Beginner-friendly `How to Use` section at the end of complete project outputs
-- Modular backend with separate config, prompt, message, client, and service layers
+- **Clean Enterprise UI**: Inspired by Linear, GitHub, and Cursor.
+- **Dual AI Providers**: Support for local Ollama and cloud-based OpenRouter.
+- **Conversation Management**: Persistent storage, auto-generated titles, and one-click summaries.
+- **Developer Focus**: Advanced Markdown support, code syntax highlighting, and copy-to-clipboard.
+- **Explanation Modes**: Tailor responses for Beginner, Student, Junior/Senior Developer, or Tech Lead.
+- **Smart Follow-ups**: Context-aware suggestion chips after every response.
+- **Pinned Messages**: Bookmark important AI responses for quick access.
+- **Responsive Design**: Fully functional on desktop and mobile.
 
-## Tech Stack
+## Architecture
 
-- Python
-- Flask
-- Groq Chat Completions API
-- Requests
-- HTML
-- CSS
-- Vanilla JavaScript
-- Local browser storage for saved chat sessions
+The project follows a modular, layered architecture:
 
-## Project Structure
+- **Presentation Layer**: React (Vite, TypeScript, Tailwind CSS, shadcn/ui)
+- **API Layer**: Flask RESTful endpoints
+- **Service Layer**: Business logic for AI interactions and data processing
+- **Provider Layer**: Pluggable AI providers (Ollama, OpenRouter)
+- **Repository Layer**: Data access using SQLAlchemy
+- **Database**: SQLite
 
-```text
-gemini chatbot/
-|-- app.py
-|-- backend/
-|   |-- __init__.py
-|   |-- chat_service.py
-|   |-- config.py
-|   |-- errors.py
-|   |-- groq_client.py
-|   |-- messages.py
-|   `-- prompts.py
-|-- requirements.txt
-|-- .env.example
-|-- .gitignore
-|-- templates/
-|   `-- index.html
-`-- static/
-    |-- script.js
-    `-- style.css
-```
-
-## How It Works
-
-### Backend
-
-The backend starts in `app.py` and delegates the provider logic to the `backend/` package.
-
-It is responsible for:
-
-- loading validated Groq settings from environment variables
-- building mode-aware chat messages
-- sending Groq Chat Completions requests through a dedicated client module
-- normalizing Groq API failures into friendly app errors
-- receiving chat history from the frontend
-- continuing the response automatically if the model stops because of token limits
-
-### Frontend
-
-The frontend is split between:
-
-- `templates/index.html`
-- `static/style.css`
-- `static/script.js`
-
-It is responsible for:
-
-- rendering the chat UI
-- switching modes
-- creating and loading chat sessions
-- showing chat history
-- formatting markdown responses
-- adding copy buttons to code blocks
-- sending chat messages, mode, and history to the backend
-
-## Setup
-
-### 1. Clone or open the project
-
-Open the project folder in your editor or terminal.
-
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Add your Groq API key
-
-Create a `.env` file in the project root and add:
-
-```env
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=openai/gpt-oss-120b
-GROQ_MAX_COMPLETION_TOKENS=4000
-GROQ_TEMPERATURE=0.2
-GROQ_TIMEOUT_SECONDS=60
-```
-
-You can use `.env.example` as the template.
-
-Optional advanced settings:
-
-```env
-GROQ_REASONING_EFFORT=medium
-GROQ_SERVICE_TIER=flex
-```
-
-### 4. Run the Flask app
-
-```bash
-python app.py
-```
-
-### 5. Open it in your browser
-
-Visit:
+## Folder Structure
 
 ```text
-http://127.0.0.1:5000
+bytebuddy/
+├── backend/
+│   ├── app/
+│   │   ├── routes/        # API Endpoints
+│   │   ├── services/      # Business Logic
+│   │   ├── providers/     # AI Provider Implementations
+│   │   ├── repositories/  # Database Queries
+│   │   ├── models/        # SQLAlchemy Models
+│   │   ├── schemas/       # Data Validation
+│   │   ├── prompts/       # System Prompts
+│   │   ├── middleware/    # Auth/Logging Middleware
+│   │   ├── database/      # DB Initialization
+│   │   ├── utils/         # Helper functions
+│   │   └── config/        # Environment Configuration
+├── frontend/              # Vite + React Application
+├── instance/              # SQLite database file
+├── docs/                  # Additional Documentation
+├── docker-compose.yml
+└── .env.example
 ```
 
-## How To Use
+## Setup & Installation
 
-### Start a new chat
+### Prerequisites
 
-Click `New Chat` to create a fresh conversation.
+- Python 3.12+
+- Node.js 20+
+- (Optional) Ollama running locally
 
-### Switch work mode
+### Backend Setup
 
-Use the mode buttons at the top:
+1. Navigate to the root directory.
+2. Install Python dependencies:
+   ```bash
+   pip install -r backend/requirements.txt
+   ```
+3. Create a `.env` file based on `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+4. Initialize the database:
+   ```bash
+   export PYTHONPATH=$PYTHONPATH:.
+   python3 <<EOF
+   from backend.app import db, create_app
+   app = create_app()
+   with app.app_context():
+       db.create_all()
+   EOF
+   ```
+5. Run the Flask server:
+   ```bash
+   python backend/run.py
+   ```
 
-- `Plan` for architecture, ideas, roadmap, and project setup
-- `Code` for implementation and full file generation
-- `Fix` for debugging and repair tasks
-- `Refactor` for improving structure and readability
+### Frontend Setup
 
-### Reopen old chats
+1. Navigate to the `frontend` directory.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-Click `History` to view previous sessions and continue them.
+## Configuring AI Providers
 
-### Ask better prompts
+### Ollama
+- Ensure Ollama is running (`ollama serve`).
+- The default URL is `http://localhost:11434`.
+- Models are auto-detected.
 
-Good prompts usually include:
+### OpenRouter
+- Get an API key from [OpenRouter](https://openrouter.ai/).
+- Add `OPENROUTER_API_KEY` to your `.env` file.
+- Select your preferred model in ByteBuddy settings.
 
-- what you want to build
-- language or framework preference
-- must-have features
-- whether you want a plan, code, fix, or refactor
+## Technical Decisions
 
-Example:
+- **TanStack Query**: Used for robust server-state management and caching.
+- **SQLAlchemy Repository Pattern**: Decouples business logic from data access.
+- **Tailwind CSS & shadcn/ui**: Provides a consistent, accessible, and professional look with minimal overhead.
+- **Explanation Modes**: Implemented via dynamic system prompting to influence LLM behavior.
 
-```text
-Build a complete Flask todo app with login, SQLite, and all files.
-```
+## License
 
-## Important Notes
-
-- This app uses Groq's OpenAI-compatible Chat Completions endpoint at `https://api.groq.com/openai/v1/chat/completions`.
-- The default model is `openai/gpt-oss-120b`, which is a strong Groq-hosted coding model.
-- You can switch models with `GROQ_MODEL` if you want a faster or cheaper option.
-- `GROQ_REASONING_EFFORT` and `GROQ_SERVICE_TIER` are optional and are only sent when you set them.
-- The `.env` file is ignored by Git for safety.
-
-## Current Limitations
-
-- Chat sessions are stored in browser local storage, not a database
-- There is no user authentication
-- Generated code should still be reviewed before production use
-- Very large projects may still require follow-up prompts
-
-## Future Improvements
-
-- Export full generated projects as zip files
-- Add per-message actions like delete or regenerate
-- Add project download bundles
-- Add streaming responses
-- Add unit tests for the backend service modules
+MIT
