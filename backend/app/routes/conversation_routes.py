@@ -54,8 +54,10 @@ def send_message(conv_id):
         msg = chat_service.send_message(conv_id, content)
         return jsonify({
             "id": msg.id,
+            "conversation_id": msg.conversation_id,
             "role": msg.role,
             "content": msg.content,
+            "is_pinned": msg.is_pinned,
             "suggestions": msg.suggestions,
             "created_at": msg.created_at.isoformat()
         }), 201
@@ -73,6 +75,24 @@ def get_messages(conv_id):
         "suggestions": m.suggestions,
         "created_at": m.created_at.isoformat()
     } for m in messages]), 200
+
+@bp.route('/conversations/<int:conv_id>/messages/<int:msg_id>/regenerate', methods=['POST'])
+def regenerate_message(conv_id, msg_id):
+    try:
+        msg = chat_service.regenerate_message(conv_id, msg_id)
+        return jsonify({
+            "id": msg.id,
+            "conversation_id": msg.conversation_id,
+            "role": msg.role,
+            "content": msg.content,
+            "is_pinned": msg.is_pinned,
+            "suggestions": msg.suggestions,
+            "created_at": msg.created_at.isoformat()
+        }), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @bp.route('/messages/<int:msg_id>/pin', methods=['POST'])
 def pin_message(msg_id):

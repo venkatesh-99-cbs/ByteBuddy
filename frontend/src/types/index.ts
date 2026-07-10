@@ -18,7 +18,7 @@ export interface Message {
 
 export interface ConversationSettings {
   provider: 'ollama' | 'openrouter';
-  model: string;
+  model: string | null;
   temperature: number;
   max_tokens: number;
   explanation_mode: string;

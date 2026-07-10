@@ -12,6 +12,8 @@ export const conversationService = {
   rename: (id: number, title: string) => api.patch<Conversation>(`/conversations/${id}`, { title }).then(r => r.data),
   getMessages: (id: number) => api.get<Message[]>(`/conversations/${id}/messages`).then(r => r.data),
   sendMessage: (id: number, content: string) => api.post<Message>(`/conversations/${id}/messages`, { content }).then(r => r.data),
+  regenerateMessage: (conversationId: number, messageId: number) =>
+    api.post<Message>(`/conversations/${conversationId}/messages/${messageId}/regenerate`).then(r => r.data),
   pinMessage: (id: number, pin: boolean) => api.post(`/messages/${id}/pin`, { pin }).then(r => r.data),
   getPinned: () => api.get<Message[]>('/conversations/pinned').then(r => r.data),
   generateSummary: (id: number) => api.post<{ summary: string }>(`/conversations/${id}/summary`).then(r => r.data),

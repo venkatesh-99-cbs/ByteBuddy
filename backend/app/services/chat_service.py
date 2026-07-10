@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from backend.app.repositories.conversation_repository import ConversationRepository
 from backend.app.providers.ollama import OllamaProvider
 from backend.app.providers.openrouter import OpenRouterProvider
+from backend.app import db
 from flask import current_app
 
 class ChatService:
@@ -11,9 +12,15 @@ class ChatService:
 
     def get_provider(self, name: str):
         if name == 'ollama':
-            return OllamaProvider(current_app.config['OLLAMA_BASE_URL'])
+            return OllamaProvider(
+                current_app.config['OLLAMA_BASE_URL'],
+                current_app.config.get('OLLAMA_MODEL')
+            )
         elif name == 'openrouter':
-            return OpenRouterProvider(current_app.config['OPENROUTER_API_KEY'])
+            return OpenRouterProvider(
+                current_app.config['OPENROUTER_API_KEY'],
+                current_app.config.get('OPENROUTER_MODEL', 'google/gemini-2.0-flash-001')
+            )
         else:
             raise ValueError(f"Unknown provider: {name}")
 
@@ -25,15 +32,46 @@ class ChatService:
         # Save user message
         self.repo.add_message(conversation_id, 'user', user_content)
 
-        # Prepare context
         messages = self.repo.get_messages(conversation_id)
+        assistant_msg = self._create_assistant_message(conv, messages)
+
+        # Auto-generate title if it's the first exchange
+        if len(messages) <= 2: # system + user + assistant (already saved)
+             new_title = self._generate_title(user_content, assistant_msg.content, conv.settings.provider, conv.settings.model)
+             if new_title:
+                 self.repo.update_title(conversation_id, new_title)
+
+        return assistant_msg
+
+    def regenerate_message(self, conversation_id: int, message_id: int):
+        conv = self.repo.get_by_id(conversation_id)
+        if not conv:
+            raise ValueError("Conversation not found")
+
+        target = self.repo.get_message(message_id)
+        if not target or target.conversation_id != conversation_id:
+            raise ValueError("Message not found")
+        if target.role != 'assistant':
+            raise ValueError("Only assistant messages can be regenerated")
+
+        messages = self.repo.get_messages(conversation_id)
+        latest_assistant = next((m for m in reversed(messages) if m.role == 'assistant'), None)
+        if not latest_assistant or latest_assistant.id != message_id:
+            raise ValueError("Only the latest assistant response can be regenerated")
+
+        self.repo.delete_message(message_id)
+        remaining_messages = self.repo.get_messages(conversation_id)
+        if not any(m.role == 'user' for m in remaining_messages):
+            raise ValueError("Regeneration needs a user message to answer")
+
+        return self._create_assistant_message(conv, remaining_messages)
+
+    def _create_assistant_message(self, conv, messages):
         chat_history = [{"role": m.role, "content": m.content} for m in messages]
 
-        # Add system prompt based on explanation mode
         system_prompt = self._get_system_prompt(conv.settings.explanation_mode)
         chat_history.insert(0, {"role": "system", "content": system_prompt})
 
-        # Get AI response
         provider = self.get_provider(conv.settings.provider)
         ai_response = provider.chat_completion(
             chat_history,
@@ -42,19 +80,8 @@ class ChatService:
             max_tokens=conv.settings.max_tokens
         )
 
-        # Generate suggestions
         suggestions = self._generate_suggestions(ai_response, conv.settings.provider, conv.settings.model)
-
-        # Save assistant message
-        assistant_msg = self.repo.add_message(conversation_id, 'assistant', ai_response, suggestions=suggestions)
-
-        # Auto-generate title if it's the first exchange
-        if len(messages) <= 2: # system + user + assistant (already saved)
-             new_title = self._generate_title(user_content, ai_response, conv.settings.provider, conv.settings.model)
-             if new_title:
-                 self.repo.update_title(conversation_id, new_title)
-
-        return assistant_msg
+        return self.repo.add_message(conv.id, 'assistant', ai_response, suggestions=suggestions)
 
     def _get_system_prompt(self, mode: str) -> str:
         base_prompt = "You are ByteBuddy, an intelligent developer companion. You help with coding, debugging, and software architecture."

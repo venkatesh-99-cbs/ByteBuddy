@@ -52,6 +52,19 @@ class ConversationRepository:
         return msg
 
     @staticmethod
+    def get_message(message_id: int) -> Optional[Message]:
+        return Message.query.get(message_id)
+
+    @staticmethod
+    def delete_message(message_id: int) -> bool:
+        msg = Message.query.get(message_id)
+        if msg:
+            db.session.delete(msg)
+            db.session.commit()
+            return True
+        return False
+
+    @staticmethod
     def get_messages(conv_id: int) -> List[Message]:
         return Message.query.filter_by(conversation_id=conv_id).order_by(Message.created_at.asc()).all()
 

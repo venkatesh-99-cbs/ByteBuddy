@@ -3,8 +3,9 @@ from typing import List, Dict, Any
 from backend.app.providers.base import AIProvider
 
 class OpenRouterProvider(AIProvider):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, default_model: str = "google/gemini-2.0-flash-001"):
         self.api_key = api_key
+        self.default_model = default_model
         self.base_url = "https://openrouter.ai/api/v1"
 
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
@@ -19,7 +20,7 @@ class OpenRouterProvider(AIProvider):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": kwargs.get("model", "google/gemini-2.0-flash-001"),
+            "model": kwargs.get("model") or self.default_model,
             "messages": messages,
             "temperature": kwargs.get("temperature", 0.7),
             "max_tokens": kwargs.get("max_tokens", 2000)

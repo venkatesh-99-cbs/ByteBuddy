@@ -1,7 +1,8 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, RefreshCw, ServerCog, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import type { ConversationSettings, ProviderModel } from '../../types';
+import { cn } from '../../lib/utils';
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -10,6 +11,10 @@ interface SettingsDrawerProps {
   onUpdate: (settings: Partial<ConversationSettings>) => void;
   ollamaModels: ProviderModel[];
   openRouterModels: ProviderModel[];
+  ollamaError?: string;
+  openRouterError?: string;
+  isRefreshingModels?: boolean;
+  onRefreshModels: () => void;
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
@@ -19,60 +24,106 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onUpdate,
   ollamaModels,
   openRouterModels,
+  ollamaError,
+  openRouterError,
+  isRefreshingModels = false,
+  onRefreshModels,
 }) => {
   if (!isOpen) return null;
 
   const explanationModes = ['Beginner', 'Student', 'Junior Developer', 'Senior Developer', 'Tech Lead'];
   const models = settings.provider === 'ollama' ? ollamaModels : openRouterModels;
+  const currentError = settings.provider === 'ollama' ? ollamaError : openRouterError;
+  const hasModels = models.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-background h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="font-semibold">Conversation Settings</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+      <div className="relative w-full max-w-md bg-background h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="p-5 border-b flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Conversation settings</h2>
+            <p className="text-xs text-muted-foreground mt-1">Provider, model, and response behavior</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close settings">
             <X size={18} />
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <div className="flex-1 overflow-y-auto p-5 space-y-7">
           <section className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">AI Provider</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase">AI provider</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={onRefreshModels}
+                disabled={isRefreshingModels}
+              >
+                <RefreshCw size={13} className={cn(isRefreshingModels && "animate-spin")} />
+                Refresh
+              </Button>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 variant={settings.provider === 'ollama' ? 'default' : 'outline'}
-                className="justify-start"
-                onClick={() => onUpdate({ provider: 'ollama' })}
+                className="justify-start gap-2 h-11"
+                onClick={() => onUpdate({ provider: 'ollama', model: '' })}
               >
+                <ServerCog size={16} />
                 Ollama
               </Button>
               <Button
                 variant={settings.provider === 'openrouter' ? 'default' : 'outline'}
-                className="justify-start"
-                onClick={() => onUpdate({ provider: 'openrouter' })}
+                className="justify-start gap-2 h-11"
+                onClick={() => onUpdate({ provider: 'openrouter', model: '' })}
               >
+                <ServerCog size={16} />
                 OpenRouter
               </Button>
+            </div>
+
+            <div className={cn(
+              "rounded-md border px-3 py-2.5 text-sm flex gap-2",
+              currentError
+                ? "bg-amber-50 border-amber-200 text-amber-950 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-100"
+                : "bg-emerald-50 border-emerald-200 text-emerald-950 dark:bg-emerald-950/25 dark:border-emerald-800 dark:text-emerald-100"
+            )}>
+              {currentError ? <AlertCircle size={16} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={16} className="mt-0.5 shrink-0" />}
+              <div>
+                <p className="font-medium">
+                  {currentError ? `${settings.provider} needs attention` : `${settings.provider} ready`}
+                </p>
+                <p className="text-xs opacity-80 mt-0.5">
+                  {currentError || `${models.length} ${models.length === 1 ? 'model' : 'models'} detected`}
+                </p>
+              </div>
             </div>
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Model</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase">Model</h3>
             <select
-              className="w-full bg-background border rounded-md p-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              value={settings.model}
+              className="w-full h-10 bg-background border rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/15 focus:border-ring disabled:bg-muted"
+              value={settings.model ?? ''}
               onChange={(e) => onUpdate({ model: e.target.value })}
+              disabled={!hasModels}
             >
-              <option value="">Select a model...</option>
+              <option value="">{hasModels ? 'Auto-select best available' : 'No models detected'}</option>
               {models.map(m => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
+            {settings.provider === 'ollama' && !hasModels && (
+              <p className="text-xs text-muted-foreground">
+                Install a local model with `ollama pull llama3.1`, then refresh.
+              </p>
+            )}
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Explanation Mode</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase">Explanation mode</h3>
             <div className="flex flex-wrap gap-2">
               {explanationModes.map(mode => (
                 <Button
@@ -90,7 +141,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           <section className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Temperature</h3>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase">Temperature</h3>
               <span className="text-xs font-mono">{settings.temperature}</span>
             </div>
             <input
@@ -106,7 +157,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           <section className="space-y-4">
              <div className="flex justify-between items-center">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Max Tokens</h3>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase">Max tokens</h3>
               <span className="text-xs font-mono">{settings.max_tokens}</span>
             </div>
             <input
