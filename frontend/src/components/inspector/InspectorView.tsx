@@ -97,7 +97,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({ conversationId, pr
             <FindingsList 
               findings={report.findings || []} 
               onGenerateFix={generateFix}
-              onUpdateStatus={updateFinding}
+              onUpdateStatus={(id, status) => updateFinding({ findingId: id, status })}
             />
           )}
         </div>

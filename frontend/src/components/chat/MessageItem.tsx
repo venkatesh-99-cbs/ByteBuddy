@@ -18,7 +18,7 @@ interface MessageItemProps {
   onTypingComplete?: () => void;
 }
 
-export const MessageItem: React.FC<MessageItemProps> = ({
+const MessageItemComponent: React.FC<MessageItemProps> = ({
   message,
   onPin,
   onRegenerate,
@@ -246,3 +246,21 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     </div>
   );
 };
+
+// Custom comparison function for React.memo to prevent unnecessary re-renders of previous messages.
+// This skips re-renders when parent states change (such as typing/composer values, sidebar toggles, theme, etc.)
+// while ensuring callbacks like onPin or onRegenerate don't invalidate the memoization (despite inline arrow references).
+const areEqual = (prevProps: MessageItemProps, nextProps: MessageItemProps) => {
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.is_pinned === nextProps.message.is_pinned &&
+    prevProps.message.workflow_stage === nextProps.message.workflow_stage &&
+    prevProps.canRegenerate === nextProps.canRegenerate &&
+    prevProps.isRegenerating === nextProps.isRegenerating &&
+    prevProps.animateTyping === nextProps.animateTyping &&
+    JSON.stringify(prevProps.message.suggestions) === JSON.stringify(nextProps.message.suggestions)
+  );
+};
+
+export const MessageItem = React.memo(MessageItemComponent, areEqual);
