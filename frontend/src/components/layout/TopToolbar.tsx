@@ -1,8 +1,9 @@
 import React from 'react';
 import { Moon, Settings, Sparkles, Sun } from 'lucide-react';
 import { Button } from '../ui/button';
-import type { ConversationSettings } from '../../types';
+import type { ConversationSettings, WorkflowStage } from '../../types';
 import { cn } from '../../lib/utils';
+import { WorkflowModeSelector } from '../workflow/WorkflowModeSelector';
 
 interface TopToolbarProps {
   title: string;
@@ -13,6 +14,9 @@ interface TopToolbarProps {
   canSummarize: boolean;
   theme: 'light' | 'dark';
   onThemeToggle: () => void;
+  stages?: any[];
+  currentStage?: WorkflowStage;
+  onStageSelect?: (stage: WorkflowStage) => void;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -24,6 +28,9 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   canSummarize,
   theme,
   onThemeToggle,
+  stages,
+  currentStage,
+  onStageSelect,
 }) => {
   const modelLabel = settings?.model || 'Auto model';
 
@@ -45,6 +52,16 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
+        {stages && currentStage && onStageSelect && (
+          <>
+            <WorkflowModeSelector 
+              stages={stages} 
+              currentStage={currentStage} 
+              onSelect={onStageSelect} 
+            />
+            <div className="w-[1px] h-4 bg-border mx-1" />
+          </>
+        )}
         <Button
           variant="ghost"
           size="sm"

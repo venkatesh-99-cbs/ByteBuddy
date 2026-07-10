@@ -1,16 +1,23 @@
 from typing import List, Optional
 from backend.app import db
-from backend.app.models.models import Conversation, Message, ConversationSettings
+from backend.app.models.models import (
+    Conversation, Message, ConversationSettings,
+    WorkflowState, WorkflowArtifact
+)
+
 
 class ConversationRepository:
     @staticmethod
-    def create(title: str = "New Conversation") -> Conversation:
+    def create(title: str = "New Conversation", workflow_stage: str = 'planning') -> Conversation:
         conv = Conversation(title=title)
         db.session.add(conv)
         db.session.commit()
         # Initialize default settings
-        settings = ConversationSettings(conversation_id=conv.id)
+        settings = ConversationSettings(conversation_id=conv.id, workflow_mode=workflow_stage)
         db.session.add(settings)
+        # Initialize workflow state
+        workflow = WorkflowState(conversation_id=conv.id, current_stage=workflow_stage)
+        db.session.add(workflow)
         db.session.commit()
         return conv
 
@@ -40,8 +47,16 @@ class ConversationRepository:
         return conv
 
     @staticmethod
-    def add_message(conv_id: int, role: str, content: str, suggestions: Optional[List[str]] = None) -> Message:
-        msg = Message(conversation_id=conv_id, role=role, content=content, suggestions=suggestions)
+    def add_message(conv_id: int, role: str, content: str,
+                    suggestions: Optional[List[str]] = None,
+                    workflow_stage: Optional[str] = None) -> Message:
+        msg = Message(
+            conversation_id=conv_id,
+            role=role,
+            content=content,
+            suggestions=suggestions,
+            workflow_stage=workflow_stage,
+        )
         db.session.add(msg)
         # Update conversation updated_at
         conv = Conversation.query.get(conv_id)

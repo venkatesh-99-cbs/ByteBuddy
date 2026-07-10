@@ -31,7 +31,6 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const explanationModes = ['Beginner', 'Student', 'Junior Developer', 'Senior Developer', 'Tech Lead'];
   const models = settings.provider === 'ollama' ? ollamaModels : openRouterModels;
   const currentError = settings.provider === 'ollama' ? ollamaError : openRouterError;
   const hasModels = models.length > 0;
@@ -120,23 +119,6 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 Install a local model with `ollama pull llama3.1`, then refresh.
               </p>
             )}
-          </section>
-
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase">Explanation mode</h3>
-            <div className="flex flex-wrap gap-2">
-              {explanationModes.map(mode => (
-                <Button
-                  key={mode}
-                  variant={settings.explanation_mode === mode ? 'secondary' : 'outline'}
-                  size="sm"
-                  className={settings.explanation_mode === mode ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}
-                  onClick={() => onUpdate({ explanation_mode: mode })}
-                >
-                  {mode}
-                </Button>
-              ))}
-            </div>
           </section>
 
           <section className="space-y-4">

@@ -2,6 +2,10 @@ from flask import Blueprint, request, jsonify
 from backend.app.services.chat_service import ChatService
 from backend.app.repositories.conversation_repository import ConversationRepository
 from backend.app import db
+from flask import Blueprint, request, jsonify
+from backend.app.services.chat_service import ChatService
+from backend.app.repositories.conversation_repository import ConversationRepository
+from backend.app import db
 from backend.app.models.models import ConversationSettings
 
 bp = Blueprint('conversations', __name__, url_prefix='/api')
@@ -12,7 +16,8 @@ repo = ConversationRepository()
 def create_conversation():
     data = request.json or {}
     title = data.get('title', 'New Conversation')
-    conv = repo.create(title)
+    workflow_stage = data.get('workflow_stage', 'planning')
+    conv = repo.create(title, workflow_stage=workflow_stage)
     return jsonify({
         "id": conv.id,
         "title": conv.title,
@@ -128,7 +133,7 @@ def conversation_settings(conv_id):
         if 'model' in data: settings.model = data['model']
         if 'temperature' in data: settings.temperature = data['temperature']
         if 'max_tokens' in data: settings.max_tokens = data['max_tokens']
-        if 'explanation_mode' in data: settings.explanation_mode = data['explanation_mode']
+        if 'workflow_mode' in data: settings.workflow_mode = data['workflow_mode']
         db.session.commit()
 
     return jsonify({
@@ -136,5 +141,5 @@ def conversation_settings(conv_id):
         "model": conv.settings.model,
         "temperature": conv.settings.temperature,
         "max_tokens": conv.settings.max_tokens,
-        "explanation_mode": conv.settings.explanation_mode
+        "workflow_mode": conv.settings.workflow_mode
     }), 200
