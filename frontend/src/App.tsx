@@ -2,17 +2,18 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conversationService, providerService } from './services/api';
 import { Sidebar } from './components/layout/Sidebar';
-import { TopToolbar } from './components/layout/TopToolbar';
 import { MessageItem } from './components/chat/MessageItem';
 import { MessageComposer } from './components/chat/MessageComposer';
 import { SettingsDrawer } from './components/chat/SettingsDrawer';
+import { ApiKeyModal } from './components/chat/ApiKeyModal';
+import { SummaryModal } from './components/chat/SummaryModal';
 import { WorkflowProgressBar } from './components/workflow/WorkflowProgressBar';
 import { WorkflowWelcome } from './components/workflow/WorkflowWelcome';
 import { WorkflowRecommendation } from './components/workflow/WorkflowRecommendation';
 import { InspectorView } from './components/inspector/InspectorView';
 import { useWorkflow } from './hooks/useWorkflow';
 import type { ConversationSettings, WorkflowStage } from './types';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Brain, FileSearch, PenLine } from 'lucide-react';
 
 const getErrorMessage = (error: unknown) => {
   if (!error || typeof error !== 'object') return undefined;
@@ -27,6 +28,11 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typingMessageId, setTypingMessageId] = useState<number | null>(null);
   const [recommendation, setRecommendation] = useState<any>(null);
+  const [summaryText, setSummaryText] = useState('');
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isApiKeyPromptOpen, setIsApiKeyPromptOpen] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | undefined>();
+  const [apiKeyPromptSkipped, setApiKeyPromptSkipped] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('bytebuddy-theme');
     if (stored === 'light' || stored === 'dark') return stored;
@@ -70,6 +76,12 @@ function App() {
     retry: 0,
   });
 
+  const { data: openRouterKeyStatus } = useQuery({
+    queryKey: ['providers', 'openrouter', 'key-status'],
+    queryFn: providerService.getOpenRouterKeyStatus,
+    retry: 0,
+  });
+
   const {
     data: openRouterModels = [],
     error: openRouterModelsError,
@@ -103,7 +115,7 @@ function App() {
   });
 
   const messageMutation = useMutation({
-    mutationFn: ({ id, content }: { id: number, content: string }) => conversationService.sendMessage(id, content),
+    mutationFn: ({ id, content, files }: { id: number, content: string, files?: File[] }) => conversationService.sendMessage(id, content, files),
     onSuccess: (assistantMessage) => {
       setTypingMessageId(assistantMessage.id);
       queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
@@ -139,15 +151,31 @@ function App() {
 
   const summaryMutation = useMutation({
     mutationFn: () => conversationService.generateSummary(activeId!),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setSummaryText(data.summary);
+      setIsSummaryOpen(true);
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     }
   });
 
+  const saveOpenRouterKeyMutation = useMutation({
+    mutationFn: providerService.saveOpenRouterKey,
+    onMutate: () => setApiKeyError(undefined),
+    onSuccess: () => {
+      setIsApiKeyPromptOpen(false);
+      setApiKeyPromptSkipped(false);
+      queryClient.invalidateQueries({ queryKey: ['providers', 'openrouter', 'key-status'] });
+      queryClient.invalidateQueries({ queryKey: ['models', 'openrouter'] });
+    },
+    onError: (error) => {
+      setApiKeyError(getErrorMessage(error) || 'Failed to save API key.');
+    }
+  });
+
   // Handlers
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = (content: string, files?: File[]) => {
     if (activeId) {
-      messageMutation.mutate({ id: activeId, content });
+      messageMutation.mutate({ id: activeId, content, files });
     }
   };
 
@@ -178,8 +206,12 @@ function App() {
     localStorage.setItem('bytebuddy-theme', theme);
   }, [theme]);
 
-  const activeConversation = conversations.find(c => c.id === activeId);
-  
+  useEffect(() => {
+    if (openRouterKeyStatus && !openRouterKeyStatus.configured && !apiKeyPromptSkipped) {
+      setIsApiKeyPromptOpen(true);
+    }
+  }, [openRouterKeyStatus, apiKeyPromptSkipped]);
+
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
       if (scrollRef.current) {
@@ -201,8 +233,13 @@ function App() {
       : getErrorMessage(openRouterModelsError);
   
   const latestAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
-  const activeGenerationError = messageMutation.error || regenerateMutation.error;
-  const isGenerating = messageMutation.isPending || regenerateMutation.isPending;
+  const isSendingInActiveChat = messageMutation.isPending && messageMutation.variables?.id === activeId;
+  const isRegeneratingInActiveChat = regenerateMutation.isPending && regenerateMutation.variables?.conversationId === activeId;
+  const activeGenerationError =
+    (messageMutation.variables?.id === activeId ? messageMutation.error : null) ||
+    (regenerateMutation.variables?.conversationId === activeId ? regenerateMutation.error : null);
+  const isGenerating = isSendingInActiveChat || isRegeneratingInActiveChat;
+  const currentStageLabel = stages.find((stage) => stage.id === workflow?.current_stage)?.label || 'Normal Chat';
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
@@ -218,20 +255,6 @@ function App() {
       />
 
       <main className="flex-1 flex flex-col min-w-0 relative">
-        <TopToolbar
-          title={activeConversation?.title || "ByteBuddy Chat"}
-          settings={settings}
-          providerHealthy={activeProviderHealthy}
-          onSettingsOpen={() => setIsSettingsOpen(true)}
-          onSummaryGenerate={() => summaryMutation.mutate()}
-          canSummarize={!!activeId && messages.length > 0 && !summaryMutation.isPending}
-          theme={theme}
-          onThemeToggle={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
-          stages={stages}
-          currentStage={workflow?.current_stage}
-          onStageSelect={handleStageSelect}
-        />
-
         {activeProviderError && activeId && (
           <div className="border-b bg-amber-50 px-4 md:px-6 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100 flex items-start gap-2">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -252,7 +275,7 @@ function App() {
           </div>
         )}
 
-        {activeId && workflow && !isWorkflowLoading && (
+        {activeId && workflow && !isWorkflowLoading && workflow.current_stage !== 'normal' && (
           <WorkflowProgressBar 
             stages={stages} 
             workflow={workflow} 
@@ -264,6 +287,16 @@ function App() {
           <InspectorView 
             conversationId={activeId} 
             provider={settings?.model || 'AI Model'} 
+            messages={messages}
+            isGenerating={isGenerating}
+            typingMessageId={typingMessageId}
+            latestAssistantMessageId={latestAssistantMessageId}
+            regenerateMessageId={regenerateMutation.variables?.messageId}
+            onSendMessage={handleSendMessage}
+            onPinMessage={(id, pin) => pinMutation.mutate({ id, pin })}
+            onRegenerateMessage={(messageId) => regenerateMutation.mutate({ conversationId: activeId, messageId })}
+            onTypingProgress={scrollToBottom}
+            onTypingComplete={(messageId) => setTypingMessageId((current) => current === messageId ? null : current)}
           />
         ) : (
           <div className="flex-1 overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted)/0.42)_100%)]" ref={scrollRef}>
@@ -291,7 +324,7 @@ function App() {
                       !messageMutation.isPending &&
                       !regenerateMutation.isPending
                     }
-                    isRegenerating={regenerateMutation.isPending && regenerateMutation.variables?.messageId === msg.id}
+                    isRegenerating={isRegeneratingInActiveChat && regenerateMutation.variables?.messageId === msg.id}
                     animateTyping={msg.id === typingMessageId && msg.role === 'assistant'}
                     onTypingProgress={scrollToBottom}
                     onTypingComplete={() => setTypingMessageId((current) => current === msg.id ? null : current)}
@@ -303,14 +336,30 @@ function App() {
                     <div className="flex max-w-[85%] md:max-w-[75%] gap-3 flex-row">
                       <div className="shrink-0 mt-1">
                         <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-sm flex items-center justify-center">
-                          <Loader2 size={16} className="animate-spin" />
+                          <Brain size={16} />
                         </div>
                       </div>
                       <div className="flex flex-col gap-1.5 min-w-0 items-start">
-                        <div className="relative group rounded-2xl px-5 py-4 shadow-sm overflow-hidden bg-card border rounded-tl-sm w-48">
-                          <div className="space-y-2">
-                            <div className="h-2 bg-muted rounded w-full animate-pulse" />
-                            <div className="h-2 bg-muted rounded w-2/3 animate-pulse" />
+                        <div className="relative group rounded-2xl px-5 py-4 shadow-sm overflow-hidden bg-card border rounded-tl-sm w-[280px]">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium">ByteBuddy is working</p>
+                            <span className="text-[11px] rounded-full bg-primary/10 text-primary px-2 py-0.5">
+                              {currentStageLabel}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <FileSearch size={13} className="text-primary" />
+                              Reading context and recent messages
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Brain size={13} className="text-primary animate-pulse" />
+                              Reasoning through the best response
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <PenLine size={13} className="text-primary" />
+                              Preparing a structured answer
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -332,6 +381,20 @@ function App() {
             onSend={handleSendMessage}
             isLoading={isGenerating}
             currentStage={workflow?.current_stage}
+            stages={stages}
+            onStageSelect={handleStageSelect}
+            settings={settings}
+            onSettingsUpdate={(s) => settingsMutation.mutate(s)}
+            ollamaModels={ollamaModels}
+            openRouterModels={openRouterModels}
+            providerHealthy={activeProviderHealthy}
+            openRouterKeyConfigured={!!openRouterKeyStatus?.configured}
+            onOpenApiKeyPrompt={() => setIsApiKeyPromptOpen(true)}
+            onSettingsOpen={() => setIsSettingsOpen(true)}
+            onSummaryGenerate={() => summaryMutation.mutate()}
+            canSummarize={!!activeId && messages.length > 0 && !summaryMutation.isPending}
+            theme={theme}
+            onThemeToggle={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
           />
         )}
 
@@ -350,8 +413,26 @@ function App() {
               refetchOllamaModels();
               refetchOpenRouterModels();
             }}
+            openRouterKeyConfigured={!!openRouterKeyStatus?.configured}
+            onOpenApiKeyPrompt={() => setIsApiKeyPromptOpen(true)}
           />
         )}
+        <SummaryModal
+          isOpen={isSummaryOpen}
+          summary={summaryText}
+          onClose={() => setIsSummaryOpen(false)}
+        />
+        <ApiKeyModal
+          isOpen={isApiKeyPromptOpen}
+          isSaving={saveOpenRouterKeyMutation.isPending}
+          error={apiKeyError}
+          canSkip
+          onSkip={() => {
+            setApiKeyPromptSkipped(true);
+            setIsApiKeyPromptOpen(false);
+          }}
+          onSave={(apiKey) => saveOpenRouterKeyMutation.mutate(apiKey)}
+        />
       </main>
     </div>
   );

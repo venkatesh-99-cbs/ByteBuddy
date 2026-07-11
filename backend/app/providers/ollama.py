@@ -45,9 +45,14 @@ class OllamaProvider(AIProvider):
         last_error = None
         for base_url in self._candidate_base_urls():
             try:
-                response = requests.post(f"{base_url}/api/chat", json=payload, timeout=60)
+                response = requests.post(f"{base_url}/api/chat", json=payload, timeout=180)
                 response.raise_for_status()
                 return response.json().get("message", {}).get("content", "")
+            except requests.exceptions.Timeout:
+                last_error = (
+                    "Ollama took too long to respond. The selected local model may still be loading "
+                    "or the request is too large. Try a smaller model, reduce max tokens, or switch to OpenRouter."
+                )
             except requests.exceptions.RequestException as exc:
                 last_error = exc
         raise Exception(f"Ollama error: {last_error}")

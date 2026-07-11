@@ -1,4 +1,4 @@
-export type WorkflowStage = 'planning' | 'architecture' | 'database' | 'api_design' | 'coding' | 'inspector' | 'security' | 'testing' | 'documentation';
+export type WorkflowStage = 'normal' | 'planning' | 'architecture' | 'database' | 'api_design' | 'coding' | 'inspector' | 'security' | 'testing' | 'documentation';
 
 export interface WorkflowState {
   id: number;

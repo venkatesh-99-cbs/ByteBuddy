@@ -45,7 +45,7 @@ class AppSettings(db.Model):
     __tablename__ = 'app_settings'
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
-    value = db.Column(db.String(255))
+    value = db.Column(db.Text)
 
 
 # ──────────────────────────────────────────────
@@ -53,6 +53,7 @@ class AppSettings(db.Model):
 # ──────────────────────────────────────────────
 
 WORKFLOW_STAGES = [
+    'normal',
     'planning',
     'architecture',
     'database',
@@ -65,15 +66,16 @@ WORKFLOW_STAGES = [
 ]
 
 STAGE_META = {
-    'planning':      {'icon': '📋', 'label': 'Planning',       'order': 0},
-    'architecture':  {'icon': '🏗',  'label': 'Architecture',   'order': 1},
-    'database':      {'icon': '🗄',  'label': 'Database',       'order': 2},
-    'api_design':    {'icon': '🌐', 'label': 'API Design',     'order': 3},
-    'coding':        {'icon': '💻', 'label': 'Coding',         'order': 4},
-    'inspector':     {'icon': '🛠',  'label': 'Code Inspector', 'order': 5},
-    'security':      {'icon': '🔒', 'label': 'Security Review','order': 6},
-    'testing':       {'icon': '🧪', 'label': 'Testing',        'order': 7},
-    'documentation': {'icon': '📄', 'label': 'Documentation',  'order': 8},
+    'normal':        {'icon': 'message-circle', 'label': 'Normal Chat',    'order': 0},
+    'planning':      {'icon': 'clipboard-list', 'label': 'Planning',       'order': 1},
+    'architecture':  {'icon': 'network',        'label': 'Architecture',   'order': 2},
+    'database':      {'icon': 'database',       'label': 'Database',       'order': 3},
+    'api_design':    {'icon': 'globe-2',        'label': 'API Design',     'order': 4},
+    'coding':        {'icon': 'code-2',         'label': 'Coding',         'order': 5},
+    'inspector':     {'icon': 'scan-search',    'label': 'Code Inspector', 'order': 6},
+    'security':      {'icon': 'shield-check',   'label': 'Security Review','order': 7},
+    'testing':       {'icon': 'flask-conical',  'label': 'Testing',        'order': 8},
+    'documentation': {'icon': 'file-text',      'label': 'Documentation',  'order': 9},
 }
 
 
@@ -101,11 +103,12 @@ class WorkflowState(db.Model):
 
     @property
     def is_completed(self):
-        return set(WORKFLOW_STAGES).issubset(set(self.completed_stages))
+        project_stages = [stage for stage in WORKFLOW_STAGES if stage != 'normal']
+        return set(project_stages).issubset(set(self.completed_stages))
 
     def next_stage(self):
         """Return the next recommended stage, or None if all complete."""
-        for stage in WORKFLOW_STAGES:
+        for stage in [stage for stage in WORKFLOW_STAGES if stage != 'normal']:
             if stage not in self.completed_stages:
                 return stage
         return None

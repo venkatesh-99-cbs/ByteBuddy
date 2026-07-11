@@ -8,6 +8,7 @@ from backend.app.providers.ollama import OllamaProvider
 from backend.app.providers.openrouter import OpenRouterProvider
 from backend.app import db
 from flask import current_app
+from backend.app.services.settings_service import SettingsService
 
 
 class ChatService:
@@ -24,13 +25,13 @@ class ChatService:
             )
         elif name == 'openrouter':
             return OpenRouterProvider(
-                current_app.config['OPENROUTER_API_KEY'],
+                SettingsService.get_openrouter_api_key(),
                 current_app.config.get('OPENROUTER_MODEL', 'google/gemini-2.0-flash-001')
             )
         else:
             raise ValueError(f"Unknown provider: {name}")
 
-    def send_message(self, conversation_id: int, user_content: str):
+    def send_message(self, conversation_id: int, user_content: str, display_content: str = None):
         conv = self.repo.get_by_id(conversation_id)
         if not conv:
             raise ValueError("Conversation not found")
@@ -40,10 +41,15 @@ class ChatService:
         current_stage = workflow.current_stage if workflow else 'planning'
 
         # Save user message with stage context
-        self.repo.add_message(conversation_id, 'user', user_content, workflow_stage=current_stage)
+        self.repo.add_message(conversation_id, 'user', display_content or user_content, workflow_stage=current_stage)
 
         messages = self.repo.get_messages(conversation_id)
-        assistant_msg = self._create_assistant_message(conv, messages, current_stage)
+        assistant_msg = self._create_assistant_message(
+            conv,
+            messages,
+            current_stage,
+            current_user_content=user_content if display_content else None,
+        )
 
         # Store the AI response as a workflow artifact
         if workflow and assistant_msg.content:
@@ -58,7 +64,7 @@ class ChatService:
         # Auto-generate title if first exchange
         if len(messages) <= 2:
             new_title = self._generate_title(
-                user_content, assistant_msg.content,
+                display_content or user_content, assistant_msg.content,
                 conv.settings.provider, conv.settings.model
             )
             if new_title:
@@ -92,12 +98,26 @@ class ChatService:
 
         return self._create_assistant_message(conv, remaining_messages, stage)
 
-    def _create_assistant_message(self, conv, messages, stage: str = 'planning'):
+    def _create_assistant_message(self, conv, messages, stage: str = 'planning', current_user_content: str = None):
         chat_history = [{"role": m.role, "content": m.content} for m in messages]
+        if current_user_content:
+            for item in reversed(chat_history):
+                if item["role"] == "user":
+                    item["content"] = current_user_content
+                    break
 
-        # Build workflow-aware system prompt with context from previous stages
-        context = self.workflow_repo.get_all_context(conv.id)
-        system_prompt = self.workflow_service.get_system_prompt(stage, context)
+        if stage == 'normal':
+            system_prompt = (
+                "You are ByteBuddy, a professional AI assistant. Answer naturally and directly. "
+                "Use Markdown when it improves clarity. Do not force software lifecycle sections "
+                "unless the user asks for them."
+            )
+        else:
+            # Build workflow-aware system prompt with context from previous stages
+            context = self.workflow_repo.get_all_context(conv.id)
+            system_prompt = self.workflow_service.get_system_prompt(stage, context)
+            if stage == 'inspector':
+                system_prompt += self._get_inspection_context(conv.id)
         chat_history.insert(0, {"role": "system", "content": system_prompt})
 
         provider = self.get_provider(conv.settings.provider)
@@ -115,6 +135,54 @@ class ChatService:
             suggestions=suggestions,
             workflow_stage=stage,
         )
+
+    def _get_inspection_context(self, conversation_id: int) -> str:
+        try:
+            from backend.app.repositories.inspection_repository import InspectionRepository
+
+            inspection_repo = InspectionRepository()
+            report = inspection_repo.get_report(conversation_id)
+            if not report:
+                return "\n\nNo inspection report is available yet."
+
+            findings = inspection_repo.get_findings(report.id)
+            files = inspection_repo.get_files(report.id)
+            context = [
+                "\n\n---\n## Latest Code Inspection Context",
+                f"Status: {report.status}",
+                f"Files scanned: {report.files_scanned or len(files)}",
+                f"Languages: {', '.join(report.languages) if report.languages else 'unknown'}",
+                f"Overall health: {report.overall_health if report.overall_health is not None else 'not scored'}",
+                f"Security score: {report.security_score if report.security_score is not None else 'not scored'}",
+                f"Maintainability score: {report.maintainability_score if report.maintainability_score is not None else 'not scored'}",
+                f"Summary: {report.summary or 'No summary available.'}",
+            ]
+
+            if report.improvements:
+                context.append("\nPrioritized improvements:")
+                for item in report.improvements[:8]:
+                    context.append(f"- {item}")
+
+            if findings:
+                context.append("\nTop findings:")
+                severity_rank = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
+                top_findings = sorted(findings, key=lambda f: severity_rank.get(f.severity, 5))[:12]
+                for finding in top_findings:
+                    location = finding.file_path or 'Global'
+                    if finding.line_number:
+                        location += f":{finding.line_number}"
+                    context.append(
+                        f"- [{finding.severity.upper()}] {finding.title} ({location}) — "
+                        f"{finding.explanation or 'No explanation'}"
+                    )
+
+            context.append(
+                "\nWhen the user asks follow-up questions, answer using this inspection context. "
+                "If they ask for fixes, prioritize critical/high findings first and provide concrete code-level steps."
+            )
+            return "\n".join(context)
+        except Exception:
+            return "\n\nInspection context could not be loaded. Continue with available conversation context."
 
     def _generate_suggestions(self, last_response: str, provider_name: str, model: str) -> List[str]:
         prompt = (

@@ -1,5 +1,16 @@
 import React, { useRef, useEffect } from 'react';
-import { Check } from 'lucide-react';
+import {
+  Check,
+  ClipboardList,
+  Code2,
+  Database,
+  FileText,
+  FlaskConical,
+  Globe2,
+  Network,
+  ScanSearch,
+  ShieldCheck,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { WorkflowState, WorkflowStage } from '../../types';
 
@@ -12,6 +23,18 @@ interface WorkflowProgressBarProps {
 export const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ stages, workflow, onStageSelect }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { current_stage, completed_stages } = workflow;
+  const orderedStages = stages.filter((stage) => stage.id !== 'normal').sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const iconMap: Record<string, React.ElementType> = {
+    planning: ClipboardList,
+    architecture: Network,
+    database: Database,
+    api_design: Globe2,
+    coding: Code2,
+    inspector: ScanSearch,
+    security: ShieldCheck,
+    testing: FlaskConical,
+    documentation: FileText,
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -29,10 +52,11 @@ export const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ stages
         className="flex items-center gap-1 overflow-x-auto no-scrollbar px-4 py-2 text-sm"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {stages.map((stage, index) => {
+        {orderedStages.map((stage, index) => {
           const isCompleted = completed_stages.includes(stage.id);
           const isActive = current_stage === stage.id;
-          const isPast = stages.findIndex(s => s.id === current_stage) > index;
+          const isPast = orderedStages.findIndex(s => s.id === current_stage) > index;
+          const StageIcon = iconMap[stage.id] || ClipboardList;
           
           return (
             <React.Fragment key={stage.id}>
@@ -52,7 +76,7 @@ export const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ stages
                   {isCompleted && !isActive ? (
                     <Check size={14} className="stroke-[3]" />
                   ) : (
-                    <span className="text-base">{stage.icon}</span>
+                    <StageIcon size={14} />
                   )}
                 </span>
                 <span className={cn("text-[13px]", !isActive && !isCompleted && "opacity-80")}>
@@ -60,7 +84,7 @@ export const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ stages
                 </span>
               </button>
               
-              {index < stages.length - 1 && (
+              {index < orderedStages.length - 1 && (
                 <div className={cn(
                   "h-[2px] w-6 shrink-0 transition-colors duration-300 rounded-full",
                   isCompleted || isPast ? "bg-emerald-500/40" : "bg-border"

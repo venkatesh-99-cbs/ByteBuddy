@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, CheckCircle2, RefreshCw, ServerCog, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, KeyRound, RefreshCw, ServerCog, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import type { ConversationSettings, ProviderModel } from '../../types';
 import { cn } from '../../lib/utils';
@@ -15,6 +15,8 @@ interface SettingsDrawerProps {
   openRouterError?: string;
   isRefreshingModels?: boolean;
   onRefreshModels: () => void;
+  openRouterKeyConfigured?: boolean;
+  onOpenApiKeyPrompt?: () => void;
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
@@ -28,6 +30,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   openRouterError,
   isRefreshingModels = false,
   onRefreshModels,
+  openRouterKeyConfigured = false,
+  onOpenApiKeyPrompt,
 }) => {
   if (!isOpen) return null;
 
@@ -80,6 +84,26 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               >
                 <ServerCog size={16} />
                 OpenRouter
+              </Button>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <KeyRound size={15} />
+                  OpenRouter API key
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {openRouterKeyConfigured ? 'A key is saved securely in the database.' : 'Add a key to use OpenRouter models.'}
+                </p>
+              </div>
+              <Button
+                variant={openRouterKeyConfigured ? 'outline' : 'default'}
+                size="sm"
+                className="shrink-0"
+                onClick={onOpenApiKeyPrompt}
+              >
+                {openRouterKeyConfigured ? 'Replace' : 'Add key'}
               </Button>
             </div>
 

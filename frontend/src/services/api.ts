@@ -14,7 +14,17 @@ export const conversationService = {
   delete: (id: number) => api.delete(`/conversations/${id}`).then(r => r.data),
   rename: (id: number, title: string) => api.patch<Conversation>(`/conversations/${id}`, { title }).then(r => r.data),
   getMessages: (id: number) => api.get<Message[]>(`/conversations/${id}/messages`).then(r => r.data),
-  sendMessage: (id: number, content: string) => api.post<Message>(`/conversations/${id}/messages`, { content }).then(r => r.data),
+  sendMessage: (id: number, content: string, files?: File[]) => {
+    if (files?.length) {
+      const formData = new FormData();
+      formData.append('content', content);
+      files.forEach((file) => formData.append('files', file));
+      return api.post<Message>(`/conversations/${id}/messages`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then(r => r.data);
+    }
+    return api.post<Message>(`/conversations/${id}/messages`, { content }).then(r => r.data);
+  },
   regenerateMessage: (conversationId: number, messageId: number) =>
     api.post<Message>(`/conversations/${conversationId}/messages/${messageId}/regenerate`).then(r => r.data),
   pinMessage: (id: number, pin: boolean) => api.post(`/messages/${id}/pin`, { pin }).then(r => r.data),
@@ -51,4 +61,6 @@ export const inspectorService = {
 export const providerService = {
   listModels: (name: string) => api.get<ProviderModel[]>(`/providers/${name}/models`).then(r => r.data),
   testConnection: (name: string, apiKey?: string) => api.post<{ success: boolean; error?: string }>(`/providers/${name}/test`, { api_key: apiKey }).then(r => r.data),
+  getOpenRouterKeyStatus: () => api.get<{ configured: boolean }>('/providers/openrouter/key/status').then(r => r.data),
+  saveOpenRouterKey: (apiKey: string) => api.post<{ configured: boolean }>('/providers/openrouter/key', { api_key: apiKey }).then(r => r.data),
 };

@@ -51,12 +51,23 @@ def rename_conversation(conv_id):
 
 @bp.route('/conversations/<int:conv_id>/messages', methods=['POST'])
 def send_message(conv_id):
-    data = request.json or {}
-    content = data.get('content')
+    display_content = None
+    if request.content_type and request.content_type.startswith('multipart/form-data'):
+        content = (request.form.get('content') or '').strip()
+        display_content = content
+        files = request.files.getlist('files')
+        attachment_context = _build_attachment_context(files)
+        if attachment_context:
+            content = f"{content}\n\n{attachment_context}".strip()
+            display_content = _build_display_attachment_summary(display_content, files)
+    else:
+        data = request.json or {}
+        content = (data.get('content') or '').strip()
+
     if not content:
         return jsonify({"error": "Content is required"}), 400
     try:
-        msg = chat_service.send_message(conv_id, content)
+        msg = chat_service.send_message(conv_id, content, display_content=display_content)
         return jsonify({
             "id": msg.id,
             "conversation_id": msg.conversation_id,
@@ -64,20 +75,85 @@ def send_message(conv_id):
             "content": msg.content,
             "is_pinned": msg.is_pinned,
             "suggestions": msg.suggestions,
+            "workflow_stage": msg.workflow_stage,
             "created_at": msg.created_at.isoformat()
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _build_attachment_context(files):
+    if not files:
+        return ""
+
+    parts = ["## User attachments"]
+    max_text_bytes = 250_000
+    max_total_chars = 24_000
+    total_chars = 0
+
+    for file in files[:8]:
+        filename = file.filename or "attachment"
+        mimetype = file.mimetype or "application/octet-stream"
+        raw = file.read()
+        size = len(raw)
+
+        if mimetype.startswith("image/"):
+            parts.append(
+                f"\n### Image: {filename}\n"
+                f"- Type: {mimetype}\n"
+                f"- Size: {size} bytes\n"
+                "- Note: The current backend records image metadata for context. "
+                "If visual analysis is needed, ask the user to describe the image or enable a vision-capable provider payload."
+            )
+            continue
+
+        if size > max_text_bytes:
+            parts.append(
+                f"\n### File: {filename}\n"
+                f"- Type: {mimetype}\n"
+                f"- Size: {size} bytes\n"
+                "- Content omitted because the file is too large for chat context."
+            )
+            continue
+
+        text = raw.decode("utf-8", errors="replace")
+        remaining = max_total_chars - total_chars
+        if remaining <= 0:
+            parts.append(f"\n### File: {filename}\n- Content omitted because attachment context limit was reached.")
+            continue
+
+        snippet = text[:remaining]
+        total_chars += len(snippet)
+        parts.append(
+            f"\n### File: {filename}\n"
+            f"- Type: {mimetype}\n"
+            f"- Size: {size} bytes\n\n"
+            "```text\n"
+            f"{snippet}\n"
+            "```"
+        )
+
+    return "\n".join(parts)
+
+
+def _build_display_attachment_summary(content, files):
+    names = [file.filename or "attachment" for file in files[:8]]
+    attachment_lines = "\n".join(f"- {name}" for name in names)
+    label = "Attached file" if len(names) == 1 else "Attached files"
+    summary = f"{content or 'Please review the attached files.'}\n\n{label}:\n{attachment_lines}"
+    return summary.strip()
 
 @bp.route('/conversations/<int:conv_id>/messages', methods=['GET'])
 def get_messages(conv_id):
     messages = repo.get_messages(conv_id)
     return jsonify([{
         "id": m.id,
+        "conversation_id": m.conversation_id,
         "role": m.role,
         "content": m.content,
         "is_pinned": m.is_pinned,
         "suggestions": m.suggestions,
+        "workflow_stage": m.workflow_stage,
         "created_at": m.created_at.isoformat()
     } for m in messages]), 200
 

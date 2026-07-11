@@ -102,7 +102,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       !isAssistant ? "justify-end" : "justify-start"
     )}>
       <div className={cn(
-        "flex max-w-[85%] md:max-w-[75%] gap-3",
+        "flex max-w-[94%] md:max-w-[86%] xl:max-w-[78%] gap-3",
         !isAssistant ? "flex-row-reverse" : "flex-row"
       )}>
         <div className="shrink-0 mt-1">
@@ -115,7 +115,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
 
         <div className={cn(
-          "flex flex-col gap-1.5 min-w-0",
+          "group/message flex flex-col gap-1.5 min-w-0",
           !isAssistant ? "items-end" : "items-start"
         )}>
           <div className={cn(
@@ -132,14 +132,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
 
           <div className={cn(
-            "relative group rounded-2xl px-5 py-3.5 shadow-sm overflow-hidden",
+            "relative rounded-2xl px-5 py-3.5 shadow-sm overflow-hidden",
             !isAssistant 
               ? "bg-primary text-primary-foreground rounded-tr-sm" 
-              : "bg-card border rounded-tl-sm"
+              : "bg-card border rounded-tl-sm text-card-foreground"
           )}>
             <div className={cn(
-              "prose max-w-none text-[14.5px] leading-relaxed break-words",
-              !isAssistant ? "prose-invert text-primary-foreground/90 prose-p:my-1" : "prose-slate dark:prose-invert prose-p:my-2 prose-pre:p-0 prose-pre:bg-transparent"
+              "prose max-w-none text-[14.5px] leading-relaxed break-words prose-headings:tracking-tight prose-li:my-0.5",
+              !isAssistant ? "prose-invert text-primary-foreground/95 prose-p:my-1" : "prose-slate dark:prose-invert prose-p:my-2 prose-pre:p-0 prose-pre:bg-transparent prose-strong:text-foreground"
             )}>
               <ReactMarkdown
                 components={{
@@ -184,43 +184,49 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 <span className="inline-block h-3 w-1.5 ml-1 translate-y-0.5 bg-current animate-pulse opacity-70" />
               )}
             </div>
-            
-            {/* Action buttons (only show on hover) */}
-            <div className={cn(
-              "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 p-1 rounded-md shadow-sm border",
-              !isAssistant ? "left-2 bg-primary-foreground/10 border-primary-foreground/20 backdrop-blur-sm" : "right-2 bg-background/80 backdrop-blur-sm"
-            )}>
+          </div>
+
+          <div className={cn(
+            "flex items-center gap-1 px-1 opacity-100 sm:opacity-0 sm:group-hover/message:opacity-100 transition-opacity",
+            !isAssistant ? "justify-end" : "justify-start",
+            message.is_pinned && "sm:opacity-100"
+          )}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+              onClick={() => copyToClipboard(message.content, 'message')}
+              title="Copy message"
+            >
+              {copiedTarget === 'message' ? <Check size={12} /> : <Copy size={12} />}
+              {copiedTarget === 'message' ? 'Copied' : 'Copy'}
+            </Button>
+            {isAssistant && (
               <Button
                 variant="ghost"
-                size="icon"
-                className={cn("h-6 w-6 rounded-sm", !isAssistant && "text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground")}
-                onClick={() => copyToClipboard(message.content, 'message')}
-                title="Copy"
+                size="sm"
+                className="h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                onClick={() => onRegenerate?.(message.id)}
+                disabled={!canRegenerate || isTyping || isRegenerating}
+                title="Retry response"
               >
-                {copiedTarget === 'message' ? <Check size={12} /> : <Copy size={12} />}
+                <RotateCcw size={12} className={cn(isRegenerating && "animate-spin")} />
+                Retry
               </Button>
-              {isAssistant && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 rounded-sm"
-                  onClick={() => onRegenerate?.(message.id)}
-                  disabled={!canRegenerate || isTyping || isRegenerating}
-                  title="Retry"
-                >
-                  <RotateCcw size={12} className={cn(isRegenerating && "animate-spin")} />
-                </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground",
+                message.is_pinned && "text-primary"
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn("h-6 w-6 rounded-sm", !isAssistant && "text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground")}
-                onClick={() => onPin(message.id, !message.is_pinned)}
-                title="Pin"
-              >
-                <Pin size={12} className={message.is_pinned ? "fill-current" : ""} />
-              </Button>
-            </div>
+              onClick={() => onPin(message.id, !message.is_pinned)}
+              title={message.is_pinned ? 'Unpin message' : 'Pin message'}
+            >
+              <Pin size={12} className={message.is_pinned ? "fill-current" : ""} />
+              {message.is_pinned ? 'Pinned' : 'Pin'}
+            </Button>
           </div>
 
           {isAssistant && !isTyping && message.suggestions && message.suggestions.length > 0 && (

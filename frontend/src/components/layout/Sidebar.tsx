@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
 
   return (
-    <aside className="w-[292px] h-full border-r bg-muted/45 flex flex-col shrink-0">
+    <aside className="hidden md:flex w-[292px] h-full border-r bg-muted/45 flex-col shrink-0">
       <div className="p-4 border-b bg-background">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-9 w-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
