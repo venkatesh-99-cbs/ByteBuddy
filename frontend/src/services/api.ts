@@ -25,6 +25,50 @@ export const conversationService = {
     }
     return api.post<Message>(`/conversations/${id}/messages`, { content }).then(r => r.data);
   },
+  streamMessage: async function* (id: number, content: string, files?: File[]) {
+    let formData: FormData | undefined;
+    if (files?.length) {
+      formData = new FormData();
+      formData.append('content', content);
+      files.forEach((file) => formData.append('files', file));
+    }
+
+    const response = await fetch(`/api/conversations/${id}/messages/stream`, {
+      method: 'POST',
+      headers: formData ? {} : { 'Content-Type': 'application/json' },
+      body: formData || JSON.stringify({ content }),
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.body) throw new Error('No response body');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              yield data;
+            } catch (e) {
+              console.error('Failed to parse SSE:', e);
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  },
   regenerateMessage: (conversationId: number, messageId: number) =>
     api.post<Message>(`/conversations/${conversationId}/messages/${messageId}/regenerate`).then(r => r.data),
   pinMessage: (id: number, pin: boolean) => api.post(`/messages/${id}/pin`, { pin }).then(r => r.data),

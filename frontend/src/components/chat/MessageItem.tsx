@@ -123,7 +123,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             !isAssistant ? "flex-row-reverse" : "flex-row"
           )}>
             <span className="font-medium text-foreground/80">{isAssistant ? 'ByteBuddy' : 'You'}</span>
-            <span>{new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(message.created_at))}</span>
+            <span>{new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).format(new Date(message.created_at))}</span>
             {isAssistant && message.workflow_stage && (
               <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase font-semibold text-[9px] tracking-wider">
                 {message.workflow_stage.replace('_', ' ')}

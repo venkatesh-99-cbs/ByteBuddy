@@ -1,5 +1,5 @@
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Generator
 from backend.app.providers.base import AIProvider
 
 class OpenRouterProvider(AIProvider):
@@ -15,22 +15,71 @@ class OpenRouterProvider(AIProvider):
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "https://bytebuddy.dev", # Optional
-            "X-Title": "ByteBuddy", # Optional
+            "HTTP-Referer": "https://bytebuddy.dev",
+            "X-Title": "ByteBuddy",
             "Content-Type": "application/json"
         }
         payload = {
             "model": kwargs.get("model") or self.default_model,
             "messages": messages,
             "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2000)
+            "max_tokens": kwargs.get("max_tokens", 2000),
+            "stream": False
         }
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response = requests.post(url, headers=headers, json=payload, timeout=300)
             response.raise_for_status()
-            return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                raise Exception("No content in response")
+            return content
+        except requests.exceptions.Timeout:
+            raise Exception("OpenRouter request timed out. Response may be incomplete.")
         except Exception as e:
             raise Exception(f"OpenRouter error: {str(e)}")
+
+    def chat_completion_stream(self, messages: List[Dict[str, str]], **kwargs) -> Generator[str, None, None]:
+        """Stream chat completion for long responses."""
+        if not self.api_key:
+            raise Exception("OpenRouter API key not configured")
+
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "https://bytebuddy.dev",
+            "X-Title": "ByteBuddy",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": kwargs.get("model") or self.default_model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", 0.7),
+            "max_tokens": kwargs.get("max_tokens", 2000),
+            "stream": True
+        }
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=300, stream=True)
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if line:
+                    line_str = line.decode('utf-8') if isinstance(line, bytes) else line
+                    if line_str.startswith('data: '):
+                        data_str = line_str[6:]
+                        if data_str == '[DONE]':
+                            break
+                        try:
+                            import json
+                            data = json.loads(data_str)
+                            delta = data.get("choices", [{}])[0].get("delta", {})
+                            chunk = delta.get("content", "")
+                            if chunk:
+                                yield chunk
+                        except:
+                            pass
+        except requests.exceptions.Timeout:
+            raise Exception("OpenRouter stream timed out. Response may be incomplete.")
+        except Exception as e:
+            raise Exception(f"OpenRouter stream error: {str(e)}")
 
     def list_models(self) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/models"

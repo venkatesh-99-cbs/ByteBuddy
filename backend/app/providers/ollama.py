@@ -1,5 +1,5 @@
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Generator
 from urllib.parse import urlparse, urlunparse
 from backend.app.providers.base import AIProvider
 
@@ -45,9 +45,12 @@ class OllamaProvider(AIProvider):
         last_error = None
         for base_url in self._candidate_base_urls():
             try:
-                response = requests.post(f"{base_url}/api/chat", json=payload, timeout=180)
+                response = requests.post(f"{base_url}/api/chat", json=payload, timeout=300)
                 response.raise_for_status()
-                return response.json().get("message", {}).get("content", "")
+                content = response.json().get("message", {}).get("content", "")
+                if not content:
+                    raise Exception("No content in response")
+                return content
             except requests.exceptions.Timeout:
                 last_error = (
                     "Ollama took too long to respond. The selected local model may still be loading "
@@ -56,6 +59,44 @@ class OllamaProvider(AIProvider):
             except requests.exceptions.RequestException as exc:
                 last_error = exc
         raise Exception(f"Ollama error: {last_error}")
+
+    def chat_completion_stream(self, messages: List[Dict[str, str]], **kwargs) -> Generator[str, None, None]:
+        """Stream chat completion for long responses."""
+        model = self._resolve_model(kwargs.get("model"))
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": kwargs.get("temperature", 0.7),
+                "num_predict": kwargs.get("max_tokens", 2000)
+            }
+        }
+        last_error = None
+        for base_url in self._candidate_base_urls():
+            try:
+                response = requests.post(f"{base_url}/api/chat", json=payload, timeout=300, stream=True)
+                response.raise_for_status()
+                import json
+                for line in response.iter_lines():
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            chunk = data.get("message", {}).get("content", "")
+                            if chunk:
+                                yield chunk
+                            if data.get("done", False):
+                                break
+                        except:
+                            pass
+                return
+            except requests.exceptions.Timeout:
+                last_error = (
+                    "Ollama stream took too long. Try a smaller model or reduce max tokens."
+                )
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+        raise Exception(f"Ollama stream error: {last_error}")
 
     def list_models(self) -> List[Dict[str, Any]]:
         last_error = None

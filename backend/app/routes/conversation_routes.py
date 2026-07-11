@@ -1,15 +1,12 @@
-from flask import Blueprint, request, jsonify
-from backend.app.services.chat_service import ChatService
-from backend.app.repositories.conversation_repository import ConversationRepository
-from backend.app import db
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response, current_app
 from backend.app.services.chat_service import ChatService
 from backend.app.repositories.conversation_repository import ConversationRepository
 from backend.app import db
 from backend.app.models.models import ConversationSettings
+import json
+import traceback
 
 bp = Blueprint('conversations', __name__, url_prefix='/api')
-chat_service = ChatService()
 repo = ConversationRepository()
 
 @bp.route('/conversations', methods=['POST'])
@@ -49,6 +46,58 @@ def rename_conversation(conv_id):
     conv = repo.update_title(conv_id, title)
     return jsonify({"id": conv.id, "title": conv.title}) if conv else (jsonify({"error": "Not found"}), 404)
 
+@bp.route('/conversations/<int:conv_id>/messages/stream', methods=['POST'])
+def send_message_stream(conv_id):
+    display_content = None
+    if request.content_type and request.content_type.startswith('multipart/form-data'):
+        content = (request.form.get('content') or '').strip()
+        display_content = content
+        files = request.files.getlist('files')
+        attachment_context = _build_attachment_context(files)
+        if attachment_context:
+            content = f"{content}\n\n{attachment_context}".strip()
+            display_content = _build_display_attachment_summary(display_content, files)
+    else:
+        data = request.json or {}
+        content = (data.get('content') or '').strip()
+
+    if not content:
+        return jsonify({"error": "Content is required"}), 400
+
+    # IMPORTANT: Collect all chunks INSIDE request context, BEFORE returning generator
+    try:
+        service = ChatService()
+        chunks = service.stream_message(conv_id, content, display_content=display_content)
+    except Exception as e:
+        traceback.print_exc()
+        chunks = []
+        error_msg = str(e)
+
+    def stream_response():
+        """Generator that yields pre-collected chunks (no DB access here)"""
+        try:
+            yield 'data: ' + json.dumps({"status": "receiving", "message": "ByteBuddy is working"}) + '\n\n'
+            yield 'data: ' + json.dumps({"status": "analyzing", "message": "Normal Chat"}) + '\n\n'
+            yield 'data: ' + json.dumps({"status": "processing", "message": "Reading context and recent messages"}) + '\n\n'
+            yield 'data: ' + json.dumps({"status": "reasoning", "message": "Reasoning through the best response"}) + '\n\n'
+            yield 'data: ' + json.dumps({"status": "preparing", "message": "Preparing a structured answer"}) + '\n\n'
+            
+            # Yield pre-collected chunks
+            if chunks:
+                for chunk in chunks:
+                    yield 'data: ' + json.dumps({"type": "chunk", "content": chunk}) + '\n\n'
+                yield 'data: ' + json.dumps({"type": "done"}) + '\n\n'
+            else:
+                yield 'data: ' + json.dumps({"type": "error", "error": error_msg if 'error_msg' in locals() else "Unknown error"}) + '\n\n'
+        except Exception as e:
+            yield 'data: ' + json.dumps({"type": "error", "error": str(e)}) + '\n\n'
+
+    return Response(stream_response(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Connection': 'keep-alive'
+    })
+
 @bp.route('/conversations/<int:conv_id>/messages', methods=['POST'])
 def send_message(conv_id):
     display_content = None
@@ -67,6 +116,7 @@ def send_message(conv_id):
     if not content:
         return jsonify({"error": "Content is required"}), 400
     try:
+        chat_service = ChatService()
         msg = chat_service.send_message(conv_id, content, display_content=display_content)
         return jsonify({
             "id": msg.id,
@@ -160,6 +210,7 @@ def get_messages(conv_id):
 @bp.route('/conversations/<int:conv_id>/messages/<int:msg_id>/regenerate', methods=['POST'])
 def regenerate_message(conv_id, msg_id):
     try:
+        chat_service = ChatService()
         msg = chat_service.regenerate_message(conv_id, msg_id)
         return jsonify({
             "id": msg.id,
@@ -194,6 +245,7 @@ def get_pinned_messages():
 
 @bp.route('/conversations/<int:conv_id>/summary', methods=['POST'])
 def generate_summary(conv_id):
+    chat_service = ChatService()
     summary = chat_service.generate_summary(conv_id)
     return jsonify({"summary": summary}) if summary else (jsonify({"error": "Failed to generate summary"}), 500)
 

@@ -12,7 +12,7 @@ import { WorkflowWelcome } from './components/workflow/WorkflowWelcome';
 import { WorkflowRecommendation } from './components/workflow/WorkflowRecommendation';
 import { InspectorView } from './components/inspector/InspectorView';
 import { useWorkflow } from './hooks/useWorkflow';
-import type { ConversationSettings, WorkflowStage } from './types';
+import type { ConversationSettings, WorkflowStage, Message } from './types';
 import { AlertCircle, Brain, FileSearch, PenLine } from 'lucide-react';
 
 const getErrorMessage = (error: unknown) => {
@@ -26,7 +26,8 @@ function App() {
   const [activeId, setActiveId] = useState<number | undefined>();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [typingMessageId, setTypingMessageId] = useState<number | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
+  const [statusMessages, setStatusMessages] = useState<string[]>([]);
   const [recommendation, setRecommendation] = useState<any>(null);
   const [summaryText, setSummaryText] = useState('');
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -39,10 +40,10 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const { stages, workflow, isWorkflowLoading, updateState } = useWorkflow(activeId);
 
-  // Queries
   const { data: conversations = [] } = useQuery({
     queryKey: ['conversations'],
     queryFn: conversationService.getAll
@@ -93,7 +94,6 @@ function App() {
     retry: 0,
   });
 
-  // Mutations
   const createMutation = useMutation({
     mutationFn: (workflow_stage?: string) => conversationService.create(undefined, workflow_stage),
     onSuccess: (newConv) => {
@@ -111,26 +111,6 @@ function App() {
       } else {
           setActiveId(undefined);
       }
-    }
-  });
-
-  const messageMutation = useMutation({
-    mutationFn: ({ id, content, files }: { id: number, content: string, files?: File[] }) => conversationService.sendMessage(id, content, files),
-    onSuccess: (assistantMessage) => {
-      setTypingMessageId(assistantMessage.id);
-      queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-    }
-  });
-
-  const regenerateMutation = useMutation({
-    mutationFn: ({ conversationId, messageId }: { conversationId: number, messageId: number }) =>
-      conversationService.regenerateMessage(conversationId, messageId),
-    onSuccess: (assistantMessage) => {
-      setTypingMessageId(assistantMessage.id);
-      queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['pinned-messages'] });
     }
   });
 
@@ -172,10 +152,49 @@ function App() {
     }
   });
 
-  // Handlers
-  const handleSendMessage = (content: string, files?: File[]) => {
-    if (activeId) {
-      messageMutation.mutate({ id: activeId, content, files });
+  const handleSendMessage = async (content: string, files?: File[]) => {
+    if (!activeId) return;
+
+    setIsStreaming(true);
+    setStatusMessages([]);
+    setStreamingMessage(null);
+
+    try {
+      for await (const event of conversationService.streamMessage(activeId, content, files)) {
+        if (event.status) {
+          setStatusMessages(prev => {
+            const updated = [...prev, event.message];
+            return updated.slice(-3);
+          });
+        } else if (event.type === 'chunk' && event.content) {
+          setStreamingMessage(prev => prev ? 
+            { ...prev, content: prev.content + event.content } :
+            {
+              id: -1,
+              conversation_id: activeId,
+              role: 'assistant',
+              content: event.content,
+              created_at: new Date().toISOString(),
+              is_pinned: false,
+              suggestions: [],
+              workflow_stage: workflow?.current_stage || 'planning'
+            }
+          );
+        } else if (event.type === 'done') {
+          setIsStreaming(false);
+          setStatusMessages([]);
+          queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          setStreamingMessage(null);
+        } else if (event.type === 'error') {
+          throw new Error(event.error);
+        }
+      }
+    } catch (error) {
+      console.error('Stream error:', error);
+      setIsStreaming(false);
+      setStatusMessages([]);
+      setStreamingMessage(null);
     }
   };
 
@@ -199,7 +218,7 @@ function App() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, messageMutation.isPending]);
+  }, [messages, isStreaming, streamingMessage]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -233,12 +252,6 @@ function App() {
       : getErrorMessage(openRouterModelsError);
   
   const latestAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
-  const isSendingInActiveChat = messageMutation.isPending && messageMutation.variables?.id === activeId;
-  const isRegeneratingInActiveChat = regenerateMutation.isPending && regenerateMutation.variables?.conversationId === activeId;
-  const activeGenerationError =
-    (messageMutation.variables?.id === activeId ? messageMutation.error : null) ||
-    (regenerateMutation.variables?.conversationId === activeId ? regenerateMutation.error : null);
-  const isGenerating = isSendingInActiveChat || isRegeneratingInActiveChat;
   const currentStageLabel = stages.find((stage) => stage.id === workflow?.current_stage)?.label || 'Normal Chat';
 
   return (
@@ -265,16 +278,6 @@ function App() {
           </div>
         )}
 
-        {activeGenerationError && (
-          <div className="border-b bg-destructive/10 px-4 md:px-6 py-3 text-sm text-destructive flex items-start gap-2">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">Response failed</p>
-              <p className="text-xs opacity-80 mt-0.5">{getErrorMessage(activeGenerationError) || 'Please check your provider settings and try again.'}</p>
-            </div>
-          </div>
-        )}
-
         {activeId && workflow && !isWorkflowLoading && workflow.current_stage !== 'normal' && (
           <WorkflowProgressBar 
             stages={stages} 
@@ -288,15 +291,15 @@ function App() {
             conversationId={activeId} 
             provider={settings?.model || 'AI Model'} 
             messages={messages}
-            isGenerating={isGenerating}
-            typingMessageId={typingMessageId}
+            isGenerating={isStreaming}
+            typingMessageId={streamingMessage?.id ?? null}
             latestAssistantMessageId={latestAssistantMessageId}
-            regenerateMessageId={regenerateMutation.variables?.messageId}
+            regenerateMessageId={undefined}
             onSendMessage={handleSendMessage}
             onPinMessage={(id, pin) => pinMutation.mutate({ id, pin })}
-            onRegenerateMessage={(messageId) => regenerateMutation.mutate({ conversationId: activeId, messageId })}
+            onRegenerateMessage={() => {}}
             onTypingProgress={scrollToBottom}
-            onTypingComplete={(messageId) => setTypingMessageId((current) => current === messageId ? null : current)}
+            onTypingComplete={() => {}}
           />
         ) : (
           <div className="flex-1 overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted)/0.42)_100%)]" ref={scrollRef}>
@@ -318,53 +321,70 @@ function App() {
                     key={msg.id}
                     message={msg}
                     onPin={(id, pin) => pinMutation.mutate({ id, pin })}
-                    onRegenerate={(messageId) => activeId && regenerateMutation.mutate({ conversationId: activeId, messageId })}
-                    canRegenerate={
-                      msg.id === latestAssistantMessageId &&
-                      !messageMutation.isPending &&
-                      !regenerateMutation.isPending
-                    }
-                    isRegenerating={isRegeneratingInActiveChat && regenerateMutation.variables?.messageId === msg.id}
-                    animateTyping={msg.id === typingMessageId && msg.role === 'assistant'}
+                    onRegenerate={() => {}}
+                    canRegenerate={false}
+                    isRegenerating={false}
+                    animateTyping={false}
                     onTypingProgress={scrollToBottom}
-                    onTypingComplete={() => setTypingMessageId((current) => current === msg.id ? null : current)}
+                    onTypingComplete={() => {}}
                   />
                 ))}
 
-                {isGenerating && (
-                  <div className="py-6 px-4 md:px-8 flex justify-start">
-                    <div className="flex max-w-[85%] md:max-w-[75%] gap-3 flex-row">
-                      <div className="shrink-0 mt-1">
-                        <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-sm flex items-center justify-center">
-                          <Brain size={16} />
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1.5 min-w-0 items-start">
-                        <div className="relative group rounded-2xl px-5 py-4 shadow-sm overflow-hidden bg-card border rounded-tl-sm w-[280px]">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium">ByteBuddy is working</p>
-                            <span className="text-[11px] rounded-full bg-primary/10 text-primary px-2 py-0.5">
-                              {currentStageLabel}
-                            </span>
+                {isStreaming && (
+                  <>
+                    <div className="py-6 px-4 md:px-8 flex justify-start">
+                      <div className="flex max-w-[85%] md:max-w-[75%] gap-3 flex-row">
+                        <div className="shrink-0 mt-1">
+                          <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-sm flex items-center justify-center">
+                            <Brain size={16} />
                           </div>
-                          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <FileSearch size={13} className="text-primary" />
-                              Reading context and recent messages
+                        </div>
+                        <div className="flex flex-col gap-1.5 min-w-0 items-start">
+                          <div className="relative group rounded-2xl px-5 py-4 shadow-sm overflow-hidden bg-card border rounded-tl-sm w-[280px]">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-medium">ByteBuddy is working</p>
+                              <span className="text-[11px] rounded-full bg-primary/10 text-primary px-2 py-0.5">
+                                {currentStageLabel}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Brain size={13} className="text-primary animate-pulse" />
-                              Reasoning through the best response
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <PenLine size={13} className="text-primary" />
-                              Preparing a structured answer
+                            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                              {statusMessages.map((msg, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  {idx === statusMessages.length - 1 ? 
+                                    <Brain size={13} className="text-primary animate-pulse" /> :
+                                    <FileSearch size={13} className="text-primary" />
+                                  }
+                                  {msg}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+
+                    {streamingMessage && (
+                      <div className="py-6 px-4 md:px-8 flex justify-start">
+                        <div className="flex max-w-[85%] md:max-w-[75%] gap-3 flex-row">
+                          <div className="shrink-0 mt-1">
+                            <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-sm flex items-center justify-center">
+                              <Brain size={16} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5 min-w-0 items-start">
+                            <MessageItem
+                              message={streamingMessage}
+                              onPin={() => {}}
+                              onRegenerate={() => {}}
+                              canRegenerate={false}
+                              isRegenerating={false}
+                              animateTyping={false}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -379,7 +399,7 @@ function App() {
         {activeId && workflow?.current_stage !== 'inspector' && (
           <MessageComposer
             onSend={handleSendMessage}
-            isLoading={isGenerating}
+            isLoading={isStreaming}
             currentStage={workflow?.current_stage}
             stages={stages}
             onStageSelect={handleStageSelect}
