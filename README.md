@@ -1,215 +1,167 @@
-# ByteBuddy – Your Intelligent Developer Companion
+# 🤖 ByteBuddy — Your Intelligent SDLC Developer Assistant
 
-> Build Faster. Learn Better. Debug Smarter.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python: 3.12](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![React: 18](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
+[![Docker: Supported](https://img.shields.io/badge/Docker-Supported-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Ollama: Local LLM](https://img.shields.io/badge/Ollama-Local%20LLM-black.svg)](https://ollama.com/)
 
-ByteBuddy is a production-quality, enterprise-grade AI Developer Assistant designed to streamline software engineering workflows. It provides a clean, professional workspace inspired by tools like Linear, GitHub, and Cursor, allowing developers to interact with local LLMs (via Ollama) or cloud-based models (via OpenRouter).
-
-At its core, ByteBuddy features a continuous **Software Development Life Cycle (SDLC) Project Flow** that chains context across multiple development stages, alongside a comprehensive **Code Inspector** that lets you upload, analyze, and remediate codebases directly.
-
----
-
-## Table of Contents
-
-1. [Key Features](#key-features)
-2. [Supported Providers & Configuration](#supported-providers--configuration)
-3. [The 10 Workspace Modes Explained](#the-10-workspace-modes-explained)
-4. [Guided Project Workflow & Context Chaining](#guided-project-workflow--context-chaining)
-5. [The Code Inspector & Upload System](#the-code-inspector--upload-system)
-6. [Tech Stack & Architecture](#tech-stack--architecture)
-7. [Getting Started & Installation](#getting-started--installation)
-8. [Usage Guide](#usage-guide)
-9. [Technical Decisions & Best Practices](#technical-decisions--best-practices)
+> **Build Faster. Learn Better. Debug Smarter.**
+> ByteBuddy is a production-quality, enterprise-grade AI Developer Assistant designed to streamline software engineering workflows. It provides a clean, professional workspace inspired by tools like Linear, GitHub, and Cursor, allowing developers to interact with local LLMs (via Ollama) or cloud-based models (via OpenRouter).
 
 ---
 
-## Key Features
+## 📖 Table of Contents
 
-- **Clean Enterprise UI**: Designed with a sleek, dark-mode-first look using Tailwind CSS, shadcn/ui components, and Framer Motion transitions.
-- **Dual AI Providers**: Dynamic toggle between local Ollama (offline, private) and cloud-based OpenRouter (cutting-edge models like Gemini, Claude, or GPT).
-- **Interactive Multi-Stage SDLC Workflow**: Move projects from initial planning to final documentation with an interactive progress bar and automatic next-stage recommendations.
-- **Context Chaining**: Outputs generated in earlier stages (e.g., database schemas or API contracts) are automatically injected as system prompt context in subsequent stages.
-- **Full Code Inspector**: Upload directories, zip archives, or paste single snippets to run a multi-dimensional analysis on code health, security, and performance.
-- **Smart Conversation Features**:
-  - **Auto-Generated Titles**: Automatically generates concise, relevant conversation titles after the first exchange.
-  - **Dynamic Follow-Up Suggestions**: Generates 3 contextual, high-quality question chips after every AI response.
-  - **One-Click Summarizer**: Leverages AI to synthesize chat transcripts into 2-3 sentence summaries.
-  - **Pinned Messages**: Bookmark critical AI responses, code snippets, or schemas to the sidebar for instant retrieval.
-  - **File & Image Attachments**: Drag and drop or attach files and images (up to 50MB); text contents are read and injected into the context, while images have metadata parsed.
-- **Responsive Adaptive Layout**: Perfectly optimized for large-screen development monitors and mobile screens alike.
-
----
-
-## Supported Providers & Configuration
-
-ByteBuddy supports pluggable providers. Each conversation maintains its own settings (accessible via the Settings Drawer or the inline toolbar):
-
-| Provider | Default URL / Settings | Model Auto-Detection | Configuration Steps |
-|---|---|---|---|
-| **Ollama** | `http://localhost:11434` | Yes (automatic via `/api/tags`) | Start Ollama (`ollama serve`), pull any model (e.g., `ollama pull llama3.1`), and ByteBuddy will automatically list and detect it. |
-| **OpenRouter** | `https://openrouter.ai` | Yes (automatic) | Save your API key via the secure in-app API Key modal. Select your preferred cloud model directly in the dropdown. |
+- [✨ Key Features](#-key-features)
+- [🧩 Supported AI Providers & Models](#-supported-ai-providers--models)
+- [🛠️ The 10 Workspace Modes Explained](#️-the-10-workspace-modes-explained)
+- [🔄 Guided Project Workflow & Context Chaining](#-guided-project-workflow--context-chaining)
+- [🔍 The Code Inspector & Upload System](#-the-code-inspector--upload-system)
+- [🏗️ Tech Stack & Directory Structure](#️-tech-stack--directory-structure)
+- [🚀 Quick Start (Local Development)](#-quick-start-local-development)
+- [🐳 Docker Deployment (Recommended)](#-docker-deployment-recommended)
+- [🔧 Environment Configuration](#-environment-configuration)
+- [💡 Troubleshooting & Best Practices](#-troubleshooting--best-practices)
+- [📄 License](#-license)
 
 ---
 
-## The 10 Workspace Modes Explained
+## ✨ Key Features
 
-ByteBuddy features **10 distinct modes** (accessible via the chat bar's Mode Selector). Switching modes updates the system prompt, AI role, and context parsing:
-
-### 1. Normal Chat (`normal`)
-- **Role**: General-purpose software assistant.
-- **How to Use**: Best for general programming questions, debugging quick snippets, explaining algorithms, or discussing design patterns without a structured project timeline.
-- **Prompt Focus**: Answers naturally and directly without forcing software lifecycle sections.
-
-### 2. Planning (`planning`)
-- **Role**: Software Project Planner.
-- **How to Use**: Starting point for new applications. Provide high-level ideas, and ByteBuddy will draft project blueprints.
-- **Outputs**: Generates Problem Statements, Objectives, Functional/Non-Functional Requirements, User Stories, Tech Stack Suggestions, Roadmaps, and Risk Assessments.
-
-### 3. Architecture (`architecture`)
-- **Role**: System Architect.
-- **How to Use**: Use this mode to map your system boundaries, folder structures, and high-level architecture.
-- **Outputs**: Recommends directory layouts, designs tiered boundaries (Presentation, Business, Data layers), drafts ASCII component diagrams, and outlines data flows.
-
-### 4. Database Design (`database`)
-- **Role**: Lead Database Administrator / Designer.
-- **How to Use**: Detail your entity models. Injects context from your *Planning* and *Architecture* stages.
-- **Outputs**: Entity-relationship maps, schema definitions (primary/foreign keys, indices), database normalization levels, and complete, copyable SQL `CREATE TABLE` scripts.
-
-### 5. API Design (`api_design`)
-- **Role**: API Architect.
-- **How to Use**: Design endpoints, payload contracts, and authentication protocols.
-- **Outputs**: Full REST/GraphQL endpoint paths, JSON Request/Response models, HTTP status codes, validation rules, authentication flows (JWT/OAuth), and OpenAPI-compatible specs.
-
-### 6. Coding (`coding`)
-- **Role**: Senior Software Engineer.
-- **How to Use**: Prompt the assistant to write files, modules, or services.
-- **Outputs**: Produces clean, highly modular, runnable, production-ready code blocks annotated with file paths, conforming to language conventions and DRY principles.
-
-### 7. Code Inspector (`inspector`)
-- **Role**: Expert Code Inspector and Security Auditor.
-- **How to Use**: Opens a specialized interactive split-view interface. Upload your project folder or paste your code.
-- **Outputs**: A multi-dimensional diagnostic dashboard (scanned metrics, files, overall health score) alongside categorized findings (critical, high, medium, low, info) and code remediation recommendations.
-
-### 8. Security Review (`security`)
-- **Role**: DevSecOps / Security Specialist.
-- **How to Use**: Perform security reviews of your architecture, APIs, databases, or code.
-- **Outputs**: Analyzes security risks, maps findings against the OWASP Top 10, identifies hardcoded secrets, SQL injection vectors, or cross-site scripting risks, and gives a prioritized mitigation roadmap.
-
-### 9. Testing (`testing`)
-- **Role**: QA Automation Architect.
-- **How to Use**: Request test suite generation for any portion of your codebase or architecture.
-- **Outputs**: Complete unit, integration, and end-to-end tests, edge case assertions, mock data/fixtures, and recommendations on test coverage tools.
-
-### 10. Documentation (`documentation`)
-- **Role**: Principal Technical Writer.
-- **How to Use**: Compile your finalized project artifacts.
-- **Outputs**: Generates enterprise-ready `README.md` files, installation guides, configuration matrices, deployment runbooks (Docker/Cloud), and developer handbooks.
+- **🎨 Clean Enterprise UI/UX**: Sleek, dark-mode-first look utilizing Tailwind CSS, `shadcn/ui` components, Lucide Icons, and smooth Framer Motion transitions.
+- **🔌 Hybrid AI Provider Engine**: Seamlessly switch between local **Ollama** (100% offline & private) and cloud-based **OpenRouter** (for advanced models like Claude, GPT, or Gemini).
+- **🔄 Interdependent SDLC Progressions**: Dynamic workspace state recommendations to guide projects smoothly from concept and design down to test creation and documentation.
+- **⛓️ Intelligently Chained Context**: Generated SDLC planning documents, DB schemas, and API contracts are automatically saved as project artifacts and appended to system prompts in subsequent stages.
+- **🩺 Interactive Code Inspector**: Upload directories, zip archives, or paste single snippets to run a multi-dimensional diagnostic report on code health, security, and performance.
+- **💬 Smart Chat Enhancements**:
+  - **Auto-Generated Titles**: Learns context from the initial turn to generate clean chat room names.
+  - **Contextual Chip Suggestions**: Dynamically renders 3 follow-up question chips after every agent response.
+  - **One-Click Conversation Summarizer**: Instantly digests long chats into 2-3 sentence reference summaries.
+  - **Response Pinning**: Bookmark code blocks, tables, or database definitions directly onto a side cabinet.
+  - **Resource Attachments**: Robust handling for documents, files, and image attachments up to 50MB.
 
 ---
 
-## Guided Project Workflow & Context Chaining
+## 🧩 Supported AI Providers & Models
 
-ByteBuddy's signature feature is the **Guided Project Workflow**. It turns the AI assistant into a continuous collaborator:
+Each chat room maintains its own local settings. Open the settings drawer or check the inline headers to set your configuration:
 
-```text
-[Planning] ──> [Architecture] ──> [Database] ──> [API Design] ──> [Coding] ──> [Inspector] ──> [Security] ──> [Testing] ──> [Documentation]
+| Provider | API Endpoint | Model Auto-Detection | Requirements & Usage |
+| :--- | :--- | :--- | :--- |
+| **Ollama** | `http://localhost:11434` *(local)*<br>`http://host.docker.internal:11434` *(Docker)* | **Yes** (automated via `/api/tags`) | Start Ollama on your machine (`ollama serve`), pull any LLM (e.g., `ollama pull llama3.1` or `qwen2.5-coder`), and ByteBuddy will automatically populate them. |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | **Yes** (automated API fetches) | Insert your API Key via the API Key Modal. Choose highly-capable cloud configurations (e.g., `google/gemini-2.0-flash-001`, `anthropic/claude-3-haiku`, etc.). |
+
+---
+
+## 🛠️ The 10 Workspace Modes Explained
+
+ByteBuddy adapts its underlying system instructions, prompt styling, and contextual behaviors based on the active **Workspace Mode**:
+
+1. **Normal Chat (`normal`)**: General purpose assistant. Perfect for writing algorithms, quick syntax questions, or standard refactors.
+2. **Planning (`planning`)**: Software Planner. Outputs user stories, product roadmaps, requirements specifications, and risk mitigation strategies.
+3. **Architecture (`architecture`)**: System Architect. Recommends tier separation structures, charts ASCII flow graphs, and proposes file/folder organization.
+4. **Database Design (`database`)**: Lead DBA. Generates relational structures, index plans, normalization steps, and copies SQL `CREATE TABLE` scripts.
+5. **API Design (`api_design`)**: API Architect. Designs endpoints, requests/payloads, CORS setups, and full OpenAPI specifications.
+6. **Coding (`coding`)**: Senior Engineer. Writes production-ready, highly DRY-compliant code blocks annotated with correct workspace file paths.
+7. **Code Inspector (`inspector`)**: Systems Auditor. Analyzes code health scores and populates security & optimization remediation panels.
+8. **Security Review (`security`)**: DevSecOps Expert. Tests structures against the OWASP Top 10, identifies secret leakage, and constructs mitigations.
+9. **Testing (`testing`)**: QA Architect. Produces robust unit, integration, and end-to-end tests, mocking utilities, and coverage plans.
+10. **Documentation (`documentation`)**: Technical Writer. Converts developer logs and milestones into elegant, clean markdown manuals and runbooks.
+
+---
+
+## 🔄 Guided Project Workflow & Context Chaining
+
+With ByteBuddy, your AI isn't just a static chat partner—it acts as an active companion that understands the state of your project.
+
+```
+ [Planning] ──► [Architecture] ──► [Database] ──► [API Design] ──► [Coding] ──► [Inspector] ──► [Security] ──► [Testing] ──► [Documentation]
 ```
 
-1. **Continuous Chaining**: When you interact with the AI in any SDLC stage (e.g., *Database Design*), ByteBuddy saves your generated plans and schemas to the database as **Workflow Artifacts**.
-2. **Context Injection**: When you move to the next stage (e.g., *API Design*), ByteBuddy automatically queries all previously completed artifacts for that conversation and injects them into the LLM system instructions. The model understands the entire architecture and database schema without you having to re-paste context.
-3. **Recommendations**: After a stage completes, ByteBuddy displays a prominent recommendation card prompting you to continue to the logical next stage in the pipeline.
+1. **Persistent Artifact Generation**: High-fidelity architectural maps, schemas, and plans are stored as persistent workflow artifacts inside the SQLite backend.
+2. **Automatic Context Progression**: Moving to subsequent steps automatically carries over previous specifications, feeding them to the prompt. *For example, when writing your API contracts (`api_design`), ByteBuddy automatically instructs the LLM on your proposed SQL structures (`database`) without requiring you to copy and paste them.*
+3. **Smart Workflows**: The UI displays customized recommendation prompts on top of the chat panel to suggest the next logical software development cycle step.
 
 ---
 
-## The Code Inspector & Upload System
+## 🔍 The Code Inspector & Upload System
 
-The Code Inspector stage operates through a custom-built, file-based interactive UI:
+ByteBuddy's **Code Inspector** dashboard provides an interactive workspace to review entire codebases:
 
-### How to use the Inspector:
-1. **Upload Files**: Drag and drop file sets, click the upload box, upload a `.zip` archive of your codebase, or paste code directly into the text editor.
-2. **Trigger Analysis**: ByteBuddy's backend parses the files, analyzes code paths, and feeds the content to your selected AI provider (Ollama or OpenRouter).
-3. **Analyze Dashboard**: View your overall code score, files scanned, language breakdowns, maintainability, performance, security, and readability metrics.
-4. **Interactive Remediation**:
-   - Scroll through categorized findings.
-   - Click any finding to inspect the detailed explanation, root cause, and why it matters.
-   - Click **Generate Fix** to receive an AI-generated diff with improved, secure code.
-   - Toggle finding statuses between `Open`, `Resolved`, or `Ignored`.
-5. **Contextual Chat**: Use the embedded Inspector sidebar to ask follow-up questions specifically about the scan report (e.g., *"How do I fix the high-severity SQL injection finding in my user routes?"*).
+1. **Multi-Format Uploads**: Easily upload single snippets, standard directories, or complete compressed `.zip` archives.
+2. **Multi-Dimensional Metrics**: Once analyzed, ByteBuddy outputs an overall code health grade alongside breakdowns for *Security*, *Performance*, *Readability*, and *Maintainability*.
+3. **Actionable Finding Feed**: Reviews issues categorized by severity (`Critical`, `High`, `Medium`, `Low`, `Info`).
+4. **Interactive Diffs (Generate Fix)**: Click any reported issue to see an analysis and click **Generate Fix** to immediately output a side-by-side patch diff.
+5. **Contextual Side-Chat**: Ask specific questions regarding the audit report (e.g., *"How do I fix the high-severity SQL Injection vector in my user login route?"*) within the persistent inspector sidebar.
 
 ---
 
-## Tech Stack & Architecture
+## 🏗️ Tech Stack & Directory Structure
 
 ByteBuddy uses a clean, decoupled **Layered Architecture**:
+`Presentation (Frontend) ➔ API Routing Layer ➔ Service Engines ➔ AI Provider / Repository Drivers ➔ Database Model`
 
-```text
-       ┌────────────────────────────────────────────────────────┐
-       │                 Presentation (Frontend)                │
-       │           React / Vite / TypeScript / Tailwind         │
-       └───────────────────────────┬────────────────────────────┘
-                                   │  HTTP / multipart-form
-                                   ▼
-       ┌────────────────────────────────────────────────────────┐
-       │                       API Layer                        │
-       │                   Flask REST Routes                    │
-       └───────────────────────────┬────────────────────────────┘
-                                   ▼
-       ┌────────────────────────────────────────────────────────┐
-       │                     Service Layer                      │
-       │      Business Logic, Workflows, Inspector, Settings    │
-       └───────────────────────────┬────────────────────────────┘
-                                   ▼
-       ┌────────────────────────────────────────────────────────┐
-       │                Provider / Repository Layer             │
-       │          Ollama & OpenRouter APIs / SQL Repositories   │
-       └───────────────────────────┬────────────────────────────┘
-                                   ▼
-       ┌────────────────────────────────────────────────────────┐
-       │                    Database Layer                      │
-       │                 SQLite / SQLAlchemy                    │
-       └────────────────────────────────────────────────────────┘
 ```
-
-- **Frontend**:
-  - **Framework**: React 18, Vite, TypeScript.
-  - **Styling**: Tailwind CSS, shadcn/ui components, Lucide Icons.
-  - **State Management & Caching**: TanStack Query (React Query) for robust server state.
-  - **UI Additions**: React Markdown, Prism Syntax Highlighter (one-dark), Framer Motion.
-- **Backend**:
-  - **Framework**: Python 3.12, Flask, Flask-SQLAlchemy, Flask-CORS, Flask-Migrate.
-  - **Database**: SQLite (stored locally at `instance/bytebuddy.db`).
-  - **Third-Party Integrations**: Requests, Pydantic, python-dotenv.
+bytebuddy/
+├── backend/                       # Flask REST Backend
+│   ├── app/
+│   │   ├── config/                # Database and System Configurations
+│   │   ├── models/                # SQLAlchemy Schemas (Users, Chats, Artifacts)
+│   │   ├── providers/             # LLM API Wrappers (Ollama, OpenRouter)
+│   │   ├── repositories/          # SQLite Access Layer (Repository Pattern)
+│   │   ├── routes/                # Flask Endpoint Blueprints (Chat, Inspector, Auth)
+│   │   └── services/              # Core Business Logic & File Upload Parsers
+│   ├── requirements.txt           # Python Package Dependencies
+│   └── run.py                     # Backend Entry Point
+├── frontend/                      # React SPA Frontend
+│   ├── src/
+│   │   ├── assets/                # Images & Icons
+│   │   ├── components/            # Shadcn & Custom UI Modules (Inspector, Chat, etc.)
+│   │   ├── hooks/                 # Custom React Hooks & Context Wrappers
+│   │   ├── lib/                   # Styling & Utility Helpers (Tailwind merging)
+│   │   ├── services/              # Axios API Service Definitions
+│   │   └── types/                 # TypeScript Contract Definitions
+│   ├── package.json               # Frontend Config & Tooling
+│   └── vite.config.ts             # Vite Build Settings
+├── instance/                      # SQL Database Persistence Directory
+│   └── bytebuddy.db               # SQLite Database File
+├── .env.example                   # Shared Environment Variables Blueprint
+├── docker-compose.yml             # Orchestration for Multi-Container Services
+├── backend.Dockerfile             # Multi-stage Container definition for Python Backend
+└── frontend.Dockerfile            # Optimized Node Container definition for SPA Frontend
+```
 
 ---
 
-## Getting Started & Installation
+## 🚀 Quick Start (Local Development)
 
 ### Prerequisites
-
 - **Python 3.12+**
-- **Node.js 20+**
-- **Ollama** (optional, for local model execution)
+- **Node.js 20+** & **npm**
+- **Ollama** (optional, for local offline execution)
 
----
-
-### Step-by-Step Installation
-
-#### 1. Clone & Environment Configuration
-Clone the repository and set up your environment variables:
+### 1. Clone & Set Up Configuration
 ```bash
+git clone https://github.com/your-username/bytebuddy.git
+cd bytebuddy
 cp .env.example .env
 ```
-Open `.env` and verify your settings (Ollama URL, optional OpenRouter API Key, database config, etc.).
 
-#### 2. Backend Setup
-Create your database and launch the API server:
+### 2. Backend Setup
+Create your virtual environment, install packages, initialize schemas, and launch the API server:
 ```bash
-# Navigate to the backend directory
+# Navigate to backend
 cd backend
 
-# Install python dependencies
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+
+# Install requirements
 pip install -r requirements.txt
 
-# Return to root directory and initialize database
+# Return to root & run migration utility to initialize SQLite
 cd ..
 export PYTHONPATH=$PYTHONPATH:.
 python3 <<EOF
@@ -219,54 +171,85 @@ with app.app_context():
     db.create_all()
 EOF
 
-# Start the Flask backend server (defaults to port 5001)
+# Start the Backend Server (defaults to port 5001)
 python backend/run.py
 ```
 
-#### 3. Frontend Setup
-In a new terminal window, configure the presentation layer:
+### 3. Frontend Setup
+In a new terminal shell:
 ```bash
-# Navigate to the frontend directory
 cd frontend
 
-# Install node dependencies
+# Install Node modules
 npm install
 
-# Start the local development server (defaults to http://localhost:5173)
+# Run the local Vite preview server (defaults to http://localhost:5173)
 npm run dev
 ```
 
 ---
 
-## Usage Guide
+## 🐳 Docker Deployment (Recommended)
 
-### Starting a Guided Project
-1. Open ByteBuddy in your browser (`http://localhost:5173`).
-2. Click **New Chat** or choose **Project Flow** from the Welcome Screen.
-3. Your progress bar will light up, indicating you are in the **Planning** stage.
-4. Prompt the AI: *"I want to build a real-time task manager app in React and Go."*
-5. Once ByteBuddy responds, review the planning artifacts. You'll see automatic follow-up chips at the bottom.
-6. Click the recommendation card at the top or use the **Mode Selector** to proceed to the **Architecture** stage. Your planning goals will follow you automatically!
+Docker provides an instant environment setup, isolating backend Python dependencies and frontend Node environments.
 
-### Using the Code Inspector
-1. Switch to **Code Inspector** mode in the composer dropdown.
-2. Upload a folder containing your source code or drop a ZIP archive of your repository.
-3. Once the files upload, click **Analyze**.
-4. Review the health percentages, scanned languages, and detailed security/quality warnings.
-5. In the findings tab, click **Generate Fix** on a finding to review code corrections, then implement them directly in your workspace.
-6. Ask the inspector chat sidebar: *"Where is the potential memory bottleneck?"* to dig deeper.
+### 🎥 Running via Docker Compose
 
----
+Configure your `.env` variables (such as OpenRouter key and database location), then simply boot the services:
 
-## Technical Decisions & Best Practices
+```bash
+# Build and run containers in detached mode
+docker-compose up --build -d
+```
 
-- **TanStack Query Caching**: Seamless UI updates, optimistic states, and instant navigation between multiple chat sessions without unnecessary backend API refetches.
-- **SQLAlchemy Repository Pattern**: Clean decoupling of raw SQLAlchemy queries from route controllers and business services, keeping route definitions legible and testable.
-- **Strict Linting**: The frontend workspace incorporates `oxlint` for lightning-fast analysis and compliance with React/TypeScript guidelines (`npm run lint`).
-- **Dynamic Context Length Limiting**: Automatic text file clipping prevents LLM context exhaustion by trimming files to strict char ceilings while notifying the user of the omission.
+### ⚙️ Docker Compose Port Layout & Routing
+- **Frontend App**: `http://localhost:5173`
+- **Backend API**: `http://localhost:5001`
+- **SQLite Storage**: Mounts locally on host at `./instance` for persistent data backups.
 
 ---
 
-## License
+## 🔧 Environment Configuration
+
+A complete `.env` file must reside in the root directory. Below are the key environment configurations:
+
+```ini
+# --- LLM Providers ---
+OLLAMA_BASE_URL=http://localhost:11434               # Local development endpoint
+# Note: In Docker contexts, use OLLAMA_BASE_URL=http://host.docker.internal:11434 to bridge network access
+OLLAMA_MODEL=llama3.1                                # Default fallback Ollama model
+
+OPENROUTER_API_KEY=your-openrouter-key               # Optional: OpenRouter token
+OPENROUTER_MODEL=google/gemini-2.0-flash-001         # Default fallback OpenRouter model
+
+# --- Database & App Config ---
+DATABASE_URL=sqlite:///instance/bytebuddy.db        # Location of relational SQLite DB
+FLASK_APP=backend/run.py
+FLASK_ENV=development                                # Switch to 'production' in production environments
+```
+
+---
+
+## 💡 Troubleshooting & Best Practices
+
+### 🔌 Connecting Docker Backend to Local Ollama
+By default, Docker containers run in isolated networks. If Ollama is running natively on your host machine (Mac/Windows/Linux), the Docker container cannot connect to `http://localhost:11434`.
+- **Solution**: Set your `OLLAMA_BASE_URL` env variable in `.env` to `http://host.docker.internal:11434`.
+- Ensure your local Ollama daemon is configured to listen on all interfaces. On macOS, run `launchctl setenv OLLAMA_HOST "0.0.0.0"` and restart Ollama.
+
+### 📂 File Sizing and Context Trimming
+The Code Inspector automatically prunes oversized or binary files during `.zip` and folder parsing to avoid breaking the LLM's context window. Highly complex codebases may show a warning banner noting trimmed paths to maintain optimal speed and response accuracy.
+
+### 🧪 Frontend Types & Fast Linting
+The frontend is built under TypeScript strict rules. Running `npm run build` is strictly typechecked via `tsc`.
+- **Linter**: We utilize `oxlint` for lightning-fast analysis:
+  ```bash
+  cd frontend
+  npm run lint
+  ```
+
+---
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
