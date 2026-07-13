@@ -1,7 +1,7 @@
 import requests
 from typing import List, Dict, Any, Generator
 from urllib.parse import urlparse, urlunparse
-from backend.app.providers.base import AIProvider
+from app.providers.base import AIProvider
 
 class OllamaProvider(AIProvider):
     def __init__(self, base_url: str, default_model: str | None = None):
@@ -126,3 +126,4 @@ class OllamaProvider(AIProvider):
             return True
         except Exception:
             return False
+

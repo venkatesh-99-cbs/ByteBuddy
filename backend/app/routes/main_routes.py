@@ -5,3 +5,4 @@ bp = Blueprint('main', __name__)
 @bp.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok", "app": "ByteBuddy"}), 200
+

@@ -1,9 +1,9 @@
 """Service for handling failed message retries with persistence and analytics."""
 import json
 from typing import Optional, Dict, Any
-from datetime import datetime
-from backend.app.repositories.conversation_repository import ConversationRepository
-from backend.app import db
+from datetime import datetime, timezone
+from app.repositories.conversation_repository import ConversationRepository
+from app import db
 
 
 class RetryService:
@@ -169,7 +169,7 @@ class RetryService:
         # For now, we just store the analytics in a structured way
         analytics = {
             "message_id": message_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "failure_reason": failure_reason,
             "provider": provider,
             "model": model,
@@ -215,3 +215,4 @@ class RetryService:
             True if the retry context is still valid
         """
         return self.get_retry_context(message_id) is not None
+

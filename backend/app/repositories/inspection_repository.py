@@ -1,6 +1,6 @@
 from typing import List, Optional
-from backend.app import db
-from backend.app.models.models import InspectionReport, InspectionFile, InspectionFinding
+from app import db
+from app.models.models import InspectionReport, InspectionFile, InspectionFinding
 
 
 class InspectionRepository:
@@ -116,3 +116,4 @@ class InspectionRepository:
     @staticmethod
     def get_finding_by_id(finding_id: int) -> Optional[InspectionFinding]:
         return InspectionFinding.query.get(finding_id)
+

@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify, Response, current_app
+from app import db, utc_isoformat
 from app.services.chat_service import ChatService
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.time_grouping_service import TimeGroupingService
 from app.services.retry_service import RetryService
-from app import db
 from app.models.models import ConversationSettings
 import json
 import traceback
@@ -23,7 +23,7 @@ def create_conversation():
     return jsonify({
         "id": conv.id,
         "title": conv.title,
-        "created_at": conv.created_at.isoformat()
+        "created_at": utc_isoformat(conv.created_at)
     }), 201
 
 @bp.route('/conversations', methods=['GET'])
@@ -39,9 +39,9 @@ def get_conversations():
             "id": c.id,
             "title": c.title,
             "summary": c.summary,
-            "created_at": c.created_at.isoformat(),
-            "updated_at": c.updated_at.isoformat(),
-            "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
+            "created_at": utc_isoformat(c.created_at),
+            "updated_at": utc_isoformat(c.updated_at),
+            "last_message_at": utc_isoformat(c.last_message_at),
             "title_ai_generated": c.title_ai_generated
         } for c in conversations]
     }), 200
@@ -95,12 +95,17 @@ def send_message_stream(conv_id):
             yield 'data: ' + json.dumps({"status": "processing", "message": "Reading context and recent messages"}) + '\n\n'
             yield 'data: ' + json.dumps({"status": "reasoning", "message": "Reasoning through the best response"}) + '\n\n'
             yield 'data: ' + json.dumps({"status": "preparing", "message": "Preparing a structured answer"}) + '\n\n'
-            
+
             # Yield pre-collected chunks
             if chunks:
                 for chunk in chunks:
                     yield 'data: ' + json.dumps({"type": "chunk", "content": chunk}) + '\n\n'
-                yield 'data: ' + json.dumps({"type": "done"}) + '\n\n'
+                # After done, emit the latest conversation title so sidebar updates immediately
+                try:
+                    conv_after = repo.get_by_id(conv_id)
+                    yield 'data: ' + json.dumps({"type": "done", "title": conv_after.title if conv_after else None}) + '\n\n'
+                except Exception:
+                    yield 'data: ' + json.dumps({"type": "done"}) + '\n\n'
             else:
                 yield 'data: ' + json.dumps({"type": "error", "error": error_msg if 'error_msg' in locals() else "Unknown error"}) + '\n\n'
         except Exception as e:
@@ -140,7 +145,7 @@ def send_message(conv_id):
             "is_pinned": msg.is_pinned,
             "suggestions": msg.suggestions,
             "workflow_stage": msg.workflow_stage,
-            "created_at": msg.created_at.isoformat(),
+            "created_at": utc_isoformat(msg.created_at),
             "failed": msg.failed,
             "error_message": msg.error_message,
             "retry_count": msg.retry_count
@@ -222,7 +227,7 @@ def get_messages(conv_id):
         "is_pinned": m.is_pinned,
         "suggestions": m.suggestions,
         "workflow_stage": m.workflow_stage,
-        "created_at": m.created_at.isoformat(),
+        "created_at": utc_isoformat(m.created_at),
         "failed": m.failed,
         "error_message": m.error_message,
         "retry_count": m.retry_count
@@ -241,7 +246,7 @@ def regenerate_message(conv_id, msg_id):
             "is_pinned": msg.is_pinned,
             "suggestions": msg.suggestions,
             "workflow_stage": msg.workflow_stage,
-            "created_at": msg.created_at.isoformat()
+            "created_at": utc_isoformat(msg.created_at)
         }), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -308,7 +313,7 @@ def retry_message(conv_id, msg_id):
                 "is_pinned": new_msg.is_pinned,
                 "suggestions": new_msg.suggestions,
                 "workflow_stage": new_msg.workflow_stage,
-                "created_at": new_msg.created_at.isoformat()
+                "created_at": utc_isoformat(new_msg.created_at)
             }), 201
         except Exception as e:
             latency = (time.time() - start_time) * 1000
@@ -345,7 +350,7 @@ def get_pinned_messages():
         "id": m.id,
         "conversation_id": m.conversation_id,
         "content": m.content,
-        "created_at": m.created_at.isoformat()
+        "created_at": utc_isoformat(m.created_at)
     } for m in messages]), 200
 
 @bp.route('/conversations/<int:conv_id>/summary', methods=['POST'])
@@ -376,3 +381,4 @@ def conversation_settings(conv_id):
         "max_tokens": conv.settings.max_tokens,
         "workflow_mode": conv.settings.workflow_mode
     }), 200
+

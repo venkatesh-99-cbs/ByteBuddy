@@ -1,6 +1,6 @@
 import requests
 from typing import List, Dict, Any, Generator
-from backend.app.providers.base import AIProvider
+from app.providers.base import AIProvider
 
 class OpenRouterProvider(AIProvider):
     def __init__(self, api_key: str, default_model: str = "google/gemini-2.0-flash-001"):
@@ -100,3 +100,4 @@ class OpenRouterProvider(AIProvider):
             return response.status_code == 200
         except Exception:
             return False
+

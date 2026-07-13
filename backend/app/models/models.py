@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 import json
 
@@ -9,9 +9,9 @@ class Conversation(db.Model):
     title = db.Column(db.String(255), nullable=False, default='New Conversation')
     summary = db.Column(db.Text, nullable=True)
     title_ai_generated = db.Column(db.Boolean, default=False)
-    last_message_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_message_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     messages = db.relationship('Message', backref='conversation', lazy=True, cascade="all, delete-orphan")
     settings = db.relationship('ConversationSettings', backref='conversation', uselist=False, cascade="all, delete-orphan")
@@ -33,7 +33,7 @@ class Message(db.Model):
     error_message = db.Column(db.Text, nullable=True)
     retry_count = db.Column(db.Integer, default=0)
     failed_context = db.Column(db.JSON, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class ConversationSettings(db.Model):
@@ -89,8 +89,8 @@ class WorkflowState(db.Model):
     completed_stages_json = db.Column(db.Text, default='[]')
     project_name = db.Column(db.String(255), nullable=True)
     tech_stack = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     @property
     def completed_stages(self):
@@ -141,7 +141,7 @@ class WorkflowArtifact(db.Model):
     artifact_type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=True)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -173,7 +173,7 @@ class InspectionReport(db.Model):
     ai_model = db.Column(db.String(100), nullable=True)
     summary = db.Column(db.Text, nullable=True)
     improvements_json = db.Column(db.Text, default='[]')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     files = db.relationship('InspectionFile', backref='report', lazy=True, cascade="all, delete-orphan")
     findings = db.relationship('InspectionFinding', backref='report', lazy=True, cascade="all, delete-orphan")
@@ -237,7 +237,7 @@ class InspectionFile(db.Model):
     language = db.Column(db.String(50), nullable=True)
     content = db.Column(db.Text, nullable=True)
     size_bytes = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -266,7 +266,7 @@ class InspectionFinding(db.Model):
     suggested_fix = db.Column(db.Text, nullable=True)
     improved_code = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), default='open')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -285,3 +285,4 @@ class InspectionFinding(db.Model):
             'status': self.status,
             'created_at': self.created_at.isoformat(),
         }
+

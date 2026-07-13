@@ -1,7 +1,8 @@
 """Service for grouping conversations by relative time periods."""
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
-from backend.app.models.models import Conversation
+from app.models.models import Conversation
+from app import utc_isoformat
 
 
 class TimeGroupingService:
@@ -138,9 +139,9 @@ class TimeGroupingService:
                 "id": conv.id,
                 "title": conv.title,
                 "summary": conv.summary,
-                "created_at": conv.created_at.isoformat() if conv.created_at else None,
-                "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
-                "last_message_at": conv.last_message_at.isoformat() if conv.last_message_at else None,
+                "created_at": utc_isoformat(conv.created_at),
+                "updated_at": utc_isoformat(conv.updated_at),
+                "last_message_at": utc_isoformat(conv.last_message_at),
                 "relative_time": TimeGroupingService.format_relative_time(timestamp),
                 "title_ai_generated": conv.title_ai_generated
             })
@@ -166,11 +167,11 @@ class TimeGroupingService:
         Args:
             conversation_id: ID of the conversation
         """
-        from backend.app import db
-        from backend.app.repositories.conversation_repository import ConversationRepository
+        from app import db
+        from app.repositories.conversation_repository import ConversationRepository
 
         repo = ConversationRepository()
         conv = repo.get_by_id(conversation_id)
         if conv:
-            conv.last_message_at = datetime.utcnow()
+            conv.last_message_at = datetime.now(timezone.utc)
             db.session.commit()

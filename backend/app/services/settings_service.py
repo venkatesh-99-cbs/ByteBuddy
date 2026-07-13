@@ -5,8 +5,8 @@ from typing import Optional
 from cryptography.fernet import Fernet, InvalidToken
 from flask import current_app
 
-from backend.app import db
-from backend.app.models.models import AppSettings
+from app import db
+from app.models.models import AppSettings
 
 
 OPENROUTER_API_KEY_SETTING = "openrouter_api_key"
@@ -60,3 +60,4 @@ class SettingsService:
     @classmethod
     def has_openrouter_api_key(cls) -> bool:
         return bool(cls.get_openrouter_api_key())
+

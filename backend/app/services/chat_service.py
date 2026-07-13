@@ -1,14 +1,14 @@
 import json
 import re
 from typing import List, Optional, Generator
-from backend.app.repositories.conversation_repository import ConversationRepository
-from backend.app.repositories.workflow_repository import WorkflowRepository
-from backend.app.services.workflow_service import WorkflowService
-from backend.app.providers.ollama import OllamaProvider
-from backend.app.providers.openrouter import OpenRouterProvider
-from backend.app import db
+from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.workflow_repository import WorkflowRepository
+from app.services.workflow_service import WorkflowService
+from app.providers.ollama import OllamaProvider
+from app.providers.openrouter import OpenRouterProvider
+from app import db
 from flask import current_app
-from backend.app.services.settings_service import SettingsService
+from app.services.settings_service import SettingsService
 import os
 
 
@@ -257,7 +257,7 @@ class ChatService:
 
     def _get_inspection_context(self, conversation_id: int) -> str:
         try:
-            from backend.app.repositories.inspection_repository import InspectionRepository
+            from app.repositories.inspection_repository import InspectionRepository
 
             inspection_repo = InspectionRepository()
             report = inspection_repo.get_report(conversation_id)
@@ -324,26 +324,54 @@ class ChatService:
 
     def _generate_title(self, user_msg: str, ai_msg: str) -> Optional[str]:
         """Generate a readable title from the user's first message without an extra AI call."""
-        user_snippet = re.sub(r'\s+', ' ', (user_msg or '')[:240]).strip()
+        user_snippet = re.sub(r'\s+', ' ', (user_msg or '')[:300]).strip()
         if not user_snippet:
             return None
-        
+
+        # Extract first meaningful sentence/phrase
         sentences = re.split(r'[.!?\n]', user_snippet)
         first_phrase = sentences[0].strip() if sentences else ""
+
+        # Remove markdown syntax and URLs
         first_phrase = re.sub(r'[`*_#>\[\]{}()]+', '', first_phrase)
         first_phrase = re.sub(r'\bhttps?://\S+', '', first_phrase).strip(' :-,')
-        
+
         if first_phrase:
             words = first_phrase.split()
-            meaningful_words = [w for w in words if len(w) > 2 and w.lower() not in 
-                              ['what', 'how', 'why', 'when', 'where', 'can', 'you', 'help', 'please', 'these', 'this']]
-            
-            if meaningful_words:
-                title = ' '.join(meaningful_words[:min(7, len(meaningful_words))]).strip(' :-,')
+            stop_words = {
+                'what', 'how', 'why', 'when', 'where', 'can', 'you', 'help',
+                'please', 'these', 'this', 'that', 'would', 'could', 'should',
+                'does', 'is', 'are', 'be', 'have', 'has', 'do', 'the', 'a',
+                'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+                'of', 'with', 'me', 'my', 'i', 'it', 'its', 'was', 'will'
+            }
+
+            # Keep meaningful words (length > 2 and not a stop word)
+            meaningful_words = [
+                w for w in words
+                if len(w) > 2 and w.lower() not in stop_words
+            ]
+
+            # If we have at least 2 meaningful words, build title from them
+            if len(meaningful_words) >= 2:
+                title = ' '.join(meaningful_words[:min(6, len(meaningful_words))]).strip(' :-,')
                 if 3 < len(title) <= 80:
                     return title[:1].upper() + title[1:]
-        
+
+            # Fallback: use ALL words (up to 8) from first phrase if meaningful filter was too aggressive
+            if len(words) >= 2:
+                title = ' '.join(words[:min(7, len(words))]).strip(' :-,')
+                if 3 < len(title) <= 80:
+                    return title[:1].upper() + title[1:]
+
+        # Last fallback: trim the raw snippet to 60 chars at a word boundary
+        if len(user_snippet) > 5:
+            trimmed = user_snippet[:60].rsplit(' ', 1)[0].strip(' :-,')
+            if len(trimmed) > 3:
+                return trimmed[:1].upper() + trimmed[1:]
+
         return None
+
 
     def generate_summary(self, conversation_id: int):
         """Generate a professional, meaningful summary of the entire conversation."""
@@ -391,3 +419,4 @@ class ChatService:
             return None
         except Exception:
             return None
+

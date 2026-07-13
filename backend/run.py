@@ -1,11 +1,12 @@
 import os
 import sys
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+# Add the backend directory itself to sys.path so all imports use 'app.*' consistently
+BACKEND_DIR = os.path.abspath(os.path.dirname(__file__))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
-from backend.app import create_app
+from app import create_app
 
 app = create_app()
 
@@ -15,3 +16,4 @@ if __name__ == "__main__":
         port=int(os.getenv("FLASK_RUN_PORT", 5001)),
         debug=os.getenv("FLASK_DEBUG", "1") == "1",
     )
+

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
-from backend.app.services.inspector_service import InspectorService
-from backend.app.services.chat_service import ChatService
-from backend.app.repositories.inspection_repository import InspectionRepository
+from app.services.inspector_service import InspectorService
+from app.services.chat_service import ChatService
+from app.repositories.inspection_repository import InspectionRepository
 
 bp = Blueprint('inspector', __name__, url_prefix='/api')
 inspector = InspectorService()
@@ -164,3 +164,4 @@ def update_finding(conv_id, finding_id):
         return jsonify({"error": "Finding not found"}), 404
 
     return jsonify(finding.to_dict()), 200
+

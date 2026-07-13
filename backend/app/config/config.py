@@ -3,12 +3,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASEDIR = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+# -----------------------------------------------------------------------
+# BASEDIR resolution — works in both local and Docker setups
+# -----------------------------------------------------------------------
+# In Docker: WORKDIR=/app, run.py is at /app/run.py
+#   → config.py is at /app/app/config/config.py
+#   → project root should be /app
+# Locally: project root is ByteBuddy/
+#   → config.py is at ByteBuddy/backend/app/config/config.py
+#   → three levels up = ByteBuddy/backend/ (which is where run.py runs from)
+#
+# We use an env var DATABASE_URL for explicit path control in Docker.
+# -----------------------------------------------------------------------
+
+# Directory where run.py lives (backend/ locally, /app in Docker)
+_this_file = os.path.abspath(__file__)                         # .../config/config.py
+_config_dir = os.path.dirname(_this_file)                      # .../config/
+_app_dir = os.path.dirname(_config_dir)                        # .../app/
+BASEDIR = os.path.dirname(_app_dir)                            # backend/ locally, /app in Docker
+
 
 def get_database_uri():
     database_url = os.getenv('DATABASE_URL')
     if not database_url:
-        return 'sqlite:///' + os.path.join(BASEDIR, 'instance', 'bytebuddy.db')
+        # Default: instance/bytebuddy.db relative to BASEDIR
+        db_path = os.path.join(BASEDIR, 'instance', 'bytebuddy.db')
+        return 'sqlite:///' + db_path
 
     sqlite_prefix = 'sqlite:///'
     if database_url.startswith(sqlite_prefix) and not database_url.startswith('sqlite:////'):
@@ -17,6 +37,7 @@ def get_database_uri():
             return sqlite_prefix + os.path.join(BASEDIR, db_path)
 
     return database_url
+
 
 class Config:
     basedir = BASEDIR
@@ -27,5 +48,5 @@ class Config:
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL')
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'google/gemini-2.0-flash-001')
-    UPLOAD_FOLDER = 'backend/uploads'
+    UPLOAD_FOLDER = 'uploads'
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB

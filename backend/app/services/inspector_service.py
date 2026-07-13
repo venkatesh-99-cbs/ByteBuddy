@@ -9,9 +9,9 @@ import zipfile
 import tempfile
 from typing import List, Dict, Optional
 from werkzeug.utils import secure_filename
-from backend.app import db
-from backend.app.repositories.inspection_repository import InspectionRepository
-from backend.app.models.models import InspectionReport
+from app import db
+from app.repositories.inspection_repository import InspectionRepository
+from app.models.models import InspectionReport
 
 
 LANGUAGE_MAP = {
@@ -379,3 +379,4 @@ class InspectorService:
         )
 
         return response
+

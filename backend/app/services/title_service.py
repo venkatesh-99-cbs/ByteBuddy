@@ -1,8 +1,8 @@
 """Service for generating AI-powered conversation titles."""
 import re
 from typing import Optional
-from backend.app.repositories.conversation_repository import ConversationRepository
-from backend.app import db
+from app.repositories.conversation_repository import ConversationRepository
+from app import db
 
 
 class TitleService:
@@ -156,3 +156,4 @@ class TitleService:
         
         # Only generate if still has default title and not manually renamed
         return conv.title == 'New Conversation' and not conv.title_ai_generated
+

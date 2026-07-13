@@ -1,6 +1,7 @@
 from typing import List, Optional
-from backend.app import db
-from backend.app.models.models import (
+from datetime import datetime, timezone
+from app import db
+from app.models.models import (
     Conversation, Message, ConversationSettings,
     WorkflowState, WorkflowArtifact
 )
@@ -43,6 +44,7 @@ class ConversationRepository:
         conv = Conversation.query.get(conv_id)
         if conv:
             conv.title = title
+            conv.title_ai_generated = True
             db.session.commit()
         return conv
 
@@ -50,6 +52,7 @@ class ConversationRepository:
     def add_message(conv_id: int, role: str, content: str,
                     suggestions: Optional[List[str]] = None,
                     workflow_stage: Optional[str] = None) -> Message:
+        now = datetime.now(timezone.utc)
         msg = Message(
             conversation_id=conv_id,
             role=role,
@@ -58,11 +61,11 @@ class ConversationRepository:
             workflow_stage=workflow_stage,
         )
         db.session.add(msg)
-        # Update conversation updated_at
+        # Update conversation timestamps — both updated_at and last_message_at
         conv = Conversation.query.get(conv_id)
         if conv:
-            from datetime import datetime
-            conv.updated_at = datetime.utcnow()
+            conv.updated_at = now
+            conv.last_message_at = now
         db.session.commit()
         return msg
 

@@ -10,6 +10,7 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DATABASE_URL=sqlite:////app/instance/bytebuddy.db
 
   frontend:
     build:
@@ -19,3 +20,5 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+    environment:
+      - VITE_API_TARGET=http://backend:5001

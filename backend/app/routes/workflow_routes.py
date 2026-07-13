@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
-from backend.app.repositories.workflow_repository import WorkflowRepository
-from backend.app.services.workflow_service import WorkflowService
-from backend.app.models.models import STAGE_META, WORKFLOW_STAGES
+from app.repositories.workflow_repository import WorkflowRepository
+from app.services.workflow_service import WorkflowService
+from app.models.models import STAGE_META, WORKFLOW_STAGES
 
 bp = Blueprint('workflow', __name__, url_prefix='/api')
 repo = WorkflowRepository()
@@ -78,3 +78,4 @@ def get_artifacts(conv_id):
     stage = request.args.get('stage')
     artifacts = repo.get_artifacts(conv_id, stage=stage)
     return jsonify([a.to_dict() for a in artifacts]), 200
+

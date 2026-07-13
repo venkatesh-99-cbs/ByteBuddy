@@ -13,3 +13,4 @@ class AIProvider(ABC):
     @abstractmethod
     def test_connection(self) -> bool:
         pass
+

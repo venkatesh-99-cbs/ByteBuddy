@@ -2,8 +2,8 @@
 Workflow Service — manages SDLC stage transitions, system prompts, and context chaining.
 """
 from typing import Optional
-from backend.app.repositories.workflow_repository import WorkflowRepository
-from backend.app.models.models import STAGE_META, WORKFLOW_STAGES
+from app.repositories.workflow_repository import WorkflowRepository
+from app.models.models import STAGE_META, WORKFLOW_STAGES
 
 
 class WorkflowService:
@@ -196,3 +196,4 @@ class WorkflowService:
             }
             for stage in WORKFLOW_STAGES
         ]
+

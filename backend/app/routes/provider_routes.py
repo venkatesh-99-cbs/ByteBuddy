@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from backend.app.services.chat_service import ChatService
-from backend.app.services.settings_service import SettingsService
+from app.services.chat_service import ChatService
+from app.services.settings_service import SettingsService
 
 bp = Blueprint('providers', __name__, url_prefix='/api/providers')
 chat_service = ChatService()
@@ -20,7 +20,7 @@ def test_connection(name):
         # For testing, we might need to override the key if provided in request
         data = request.json or {}
         if name == 'openrouter' and 'api_key' in data:
-             from backend.app.providers.openrouter import OpenRouterProvider
+             from app.providers.openrouter import OpenRouterProvider
              provider = OpenRouterProvider(data['api_key'])
         else:
              provider = chat_service.get_provider(name)
@@ -41,10 +41,11 @@ def save_openrouter_key():
     if not api_key:
         return jsonify({"error": "OpenRouter API key is required"}), 400
 
-    from backend.app.providers.openrouter import OpenRouterProvider
+    from app.providers.openrouter import OpenRouterProvider
     provider = OpenRouterProvider(api_key)
     if not provider.test_connection():
         return jsonify({"error": "OpenRouter rejected the API key"}), 400
 
     SettingsService.save_openrouter_api_key(api_key)
     return jsonify({"configured": True}), 200
+

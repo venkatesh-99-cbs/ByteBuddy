@@ -10,7 +10,8 @@ const api = axios.create({
 
 export const conversationService = {
   create: (title?: string, workflow_stage?: string) => api.post<Conversation>('/conversations', { title, workflow_stage }).then(r => r.data),
-  getAll: () => api.get<Conversation[]>('/conversations').then(r => r.data),
+  getAll: () => api.get<{ grouped: Record<string, any[]>; all: Conversation[] }>('/conversations').then(r => r.data.all),
+
   delete: (id: number) => api.delete(`/conversations/${id}`).then(r => r.data),
   rename: (id: number, title: string) => api.patch<Conversation>(`/conversations/${id}`, { title }).then(r => r.data),
   getMessages: (id: number) => api.get<Message[]>(`/conversations/${id}/messages`).then(r => r.data),

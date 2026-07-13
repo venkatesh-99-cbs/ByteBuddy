@@ -1,6 +1,6 @@
 from typing import List, Optional
-from backend.app import db
-from backend.app.models.models import WorkflowState, WorkflowArtifact
+from app import db
+from app.models.models import WorkflowState, WorkflowArtifact
 
 
 class WorkflowRepository:
@@ -74,3 +74,4 @@ class WorkflowRepository:
                 'content': a.content[:2000],  # Truncate for prompt context
             })
         return context
+
