@@ -1,13 +1,18 @@
 from flask import Blueprint, request, jsonify, Response, current_app
-from backend.app.services.chat_service import ChatService
-from backend.app.repositories.conversation_repository import ConversationRepository
-from backend.app import db
-from backend.app.models.models import ConversationSettings
+from app.services.chat_service import ChatService
+from app.repositories.conversation_repository import ConversationRepository
+from app.services.time_grouping_service import TimeGroupingService
+from app.services.retry_service import RetryService
+from app import db
+from app.models.models import ConversationSettings
 import json
 import traceback
+import time
 
 bp = Blueprint('conversations', __name__, url_prefix='/api')
 repo = ConversationRepository()
+time_grouping_service = TimeGroupingService()
+retry_service = RetryService()
 
 @bp.route('/conversations', methods=['POST'])
 def create_conversation():
@@ -24,13 +29,22 @@ def create_conversation():
 @bp.route('/conversations', methods=['GET'])
 def get_conversations():
     conversations = repo.get_all()
-    return jsonify([{
-        "id": c.id,
-        "title": c.title,
-        "summary": c.summary,
-        "created_at": c.created_at.isoformat(),
-        "updated_at": c.updated_at.isoformat()
-    } for c in conversations]), 200
+    
+    # Group by time
+    grouped = time_grouping_service.group_conversations(conversations)
+    
+    return jsonify({
+        "grouped": grouped,
+        "all": [{
+            "id": c.id,
+            "title": c.title,
+            "summary": c.summary,
+            "created_at": c.created_at.isoformat(),
+            "updated_at": c.updated_at.isoformat(),
+            "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
+            "title_ai_generated": c.title_ai_generated
+        } for c in conversations]
+    }), 200
 
 @bp.route('/conversations/<int:conv_id>', methods=['DELETE'])
 def delete_conversation(conv_id):
@@ -126,9 +140,13 @@ def send_message(conv_id):
             "is_pinned": msg.is_pinned,
             "suggestions": msg.suggestions,
             "workflow_stage": msg.workflow_stage,
-            "created_at": msg.created_at.isoformat()
+            "created_at": msg.created_at.isoformat(),
+            "failed": msg.failed,
+            "error_message": msg.error_message,
+            "retry_count": msg.retry_count
         }), 201
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -204,7 +222,10 @@ def get_messages(conv_id):
         "is_pinned": m.is_pinned,
         "suggestions": m.suggestions,
         "workflow_stage": m.workflow_stage,
-        "created_at": m.created_at.isoformat()
+        "created_at": m.created_at.isoformat(),
+        "failed": m.failed,
+        "error_message": m.error_message,
+        "retry_count": m.retry_count
     } for m in messages]), 200
 
 @bp.route('/conversations/<int:conv_id>/messages/<int:msg_id>/regenerate', methods=['POST'])
@@ -219,11 +240,95 @@ def regenerate_message(conv_id, msg_id):
             "content": msg.content,
             "is_pinned": msg.is_pinned,
             "suggestions": msg.suggestions,
+            "workflow_stage": msg.workflow_stage,
             "created_at": msg.created_at.isoformat()
         }), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@bp.route('/conversations/<int:conv_id>/messages/<int:msg_id>/retry', methods=['POST'])
+def retry_message(conv_id, msg_id):
+    """Retry a failed response."""
+    try:
+        chat_service = ChatService()
+        
+        # Get the failed message
+        msg = repo.get_message(msg_id)
+        if not msg or msg.conversation_id != conv_id:
+            return jsonify({"error": "Message not found"}), 404
+        
+        if not msg.failed:
+            return jsonify({"error": "Message is not failed"}), 400
+        
+        conv = repo.get_by_id(conv_id)
+        if not conv:
+            return jsonify({"error": "Conversation not found"}), 404
+        
+        # Increment retry count
+        retry_service.increment_retry_count(msg_id)
+        
+        # Get messages up to (but not including) the failed message
+        all_messages = repo.get_messages(conv_id)
+        messages = [m for m in all_messages if m.id != msg_id]
+        
+        if not any(m.role == 'user' for m in messages):
+            return jsonify({"error": "No user message to retry"}), 400
+        
+        start_time = time.time()
+        try:
+            # Create new assistant message using existing context
+            new_msg = chat_service._create_assistant_message(
+                conv,
+                messages,
+                msg.workflow_stage or 'normal'
+            )
+            
+            latency = (time.time() - start_time) * 1000
+            
+            # Mark original as succeeded (by replacing it)
+            retry_service.mark_response_succeeded(msg_id, new_msg.content)
+            retry_service.log_retry_analytics(
+                msg_id,
+                failure_reason=msg.error_message,
+                provider=conv.settings.provider,
+                model=conv.settings.model,
+                latency=latency,
+                retry_count=msg.retry_count,
+                success=True
+            )
+            
+            return jsonify({
+                "id": new_msg.id,
+                "conversation_id": new_msg.conversation_id,
+                "role": new_msg.role,
+                "content": new_msg.content,
+                "is_pinned": new_msg.is_pinned,
+                "suggestions": new_msg.suggestions,
+                "workflow_stage": new_msg.workflow_stage,
+                "created_at": new_msg.created_at.isoformat()
+            }), 201
+        except Exception as e:
+            latency = (time.time() - start_time) * 1000
+            retry_service.log_retry_analytics(
+                msg_id,
+                failure_reason=str(e),
+                provider=conv.settings.provider,
+                model=conv.settings.model,
+                latency=latency,
+                retry_count=msg.retry_count,
+                success=False
+            )
+            
+            # Update error message
+            msg.error_message = str(e)
+            db.session.commit()
+            
+            return jsonify({"error": str(e), "can_retry": retry_service.can_retry(msg_id)}), 500
+    except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @bp.route('/messages/<int:msg_id>/pin', methods=['POST'])

@@ -38,11 +38,6 @@ class ChatService:
             raise ValueError(f"Unknown provider: {name}")
 
     def stream_message(self, conversation_id: int, user_content: str, display_content: str = None):
-        """
-        Stream AI response. Returns a dict with all data collected within request context.
-        The actual streaming happens on the frontend consuming the chunks.
-        """
-        # ALL database and AI operations happen HERE, within request context
         conv = self.repo.get_by_id(conversation_id)
         if not conv:
             raise ValueError("Conversation not found")
@@ -52,6 +47,7 @@ class ChatService:
 
         self.repo.add_message(conversation_id, 'user', display_content or user_content, workflow_stage=current_stage)
         messages = self.repo.get_messages(conversation_id)
+        assistant_count_before_response = sum(1 for m in messages if m.role == 'assistant')
 
         chat_history = [{'role': m.role, 'content': m.content} for m in messages]
         if display_content:
@@ -63,7 +59,7 @@ class ChatService:
         if current_stage == 'normal':
             system_prompt = (
                 "You are ByteBuddy, a professional AI assistant. Answer naturally and directly. "
-                "Use Markdown when it improves clarity. Provide complete, thorough responses."
+                "Use Markdown when it improves clarity. Provide complete, thorough, professional responses."
             )
         else:
             context = self.workflow_repo.get_all_context(conv.id)
@@ -74,16 +70,15 @@ class ChatService:
         chat_history.insert(0, {'role': 'system', 'content': system_prompt})
 
         provider = self.get_provider(conv.settings.provider)
-        chunks = []  # Collect all chunks here
+        chunks = []
         full_response = ""
 
-        # Stream from provider and collect chunks
         try:
             for chunk in provider.chat_completion_stream(
                 chat_history,
                 model=conv.settings.model,
                 temperature=conv.settings.temperature,
-                max_tokens=max(conv.settings.max_tokens, 3000)
+                max_tokens=max(conv.settings.max_tokens, 5000)
             ):
                 chunks.append(chunk)
                 full_response += chunk
@@ -93,7 +88,6 @@ class ChatService:
             full_response += error_text
             raise
 
-        # Persist response (still in request context)
         if full_response.strip():
             try:
                 suggestions = self._generate_suggestions(full_response, conv.settings.provider, conv.settings.model)
@@ -114,7 +108,13 @@ class ChatService:
             except Exception:
                 pass
 
-        # Return chunks that can be yielded by the route handler
+            self._maybe_generate_title(
+                conversation_id,
+                display_content or user_content,
+                full_response,
+                assistant_count_before_response,
+            )
+
         return chunks
 
     def send_message(self, conversation_id: int, user_content: str, display_content: str = None):
@@ -155,16 +155,14 @@ class ChatService:
             except Exception:
                 pass
 
-        if len(messages) <= 2:
-            try:
-                new_title = self._generate_title(
-                    display_content or user_content, assistant_msg.content,
-                    conv.settings.provider, conv.settings.model
-                )
-                if new_title:
-                    self.repo.update_title(conversation_id, new_title)
-            except Exception:
-                pass
+        # Generate title only on the first exchange.
+        assistant_count_before_response = sum(1 for m in messages if m.role == 'assistant')
+        self._maybe_generate_title(
+            conversation_id,
+            display_content or user_content,
+            assistant_msg.content,
+            assistant_count_before_response,
+        )
 
         return assistant_msg
 
@@ -179,12 +177,17 @@ class ChatService:
         if target.role != 'assistant':
             raise ValueError("Only assistant messages can be regenerated")
 
-        messages = self.repo.get_messages(conversation_id)
-        latest_assistant = next((m for m in reversed(messages) if m.role == 'assistant'), None)
-        if not latest_assistant or latest_assistant.id != message_id:
-            raise ValueError("Only the latest assistant response can be regenerated")
-
         stage = target.workflow_stage or 'planning'
+        messages = self.repo.get_messages(conversation_id)
+        latest_stage_assistant = next(
+            (
+                m for m in reversed(messages)
+                if m.role == 'assistant' and (m.workflow_stage or 'planning') == stage
+            ),
+            None,
+        )
+        if not latest_stage_assistant or latest_stage_assistant.id != message_id:
+            raise ValueError("Only the latest assistant response in this chat stage can be regenerated")
 
         self.repo.delete_message(message_id)
         remaining_messages = self.repo.get_messages(conversation_id)
@@ -204,7 +207,7 @@ class ChatService:
         if stage == 'normal':
             system_prompt = (
                 "You are ByteBuddy, a professional AI assistant. Answer naturally and directly. "
-                "Use Markdown when it improves clarity. Provide complete, thorough responses without truncation."
+                "Use Markdown when it improves clarity. Provide complete, thorough, professional responses without truncation."
             )
         else:
             context = self.workflow_repo.get_all_context(conv.id)
@@ -220,7 +223,7 @@ class ChatService:
             chat_history,
             model=conv.settings.model,
             temperature=conv.settings.temperature,
-            max_tokens=max(conv.settings.max_tokens, 3000)
+            max_tokens=max(conv.settings.max_tokens, 5000)
         )
 
         if not ai_response or ai_response.strip() == "":
@@ -233,6 +236,24 @@ class ChatService:
             suggestions=suggestions,
             workflow_stage=stage,
         )
+
+    def _maybe_generate_title(
+        self,
+        conversation_id: int,
+        user_content: str,
+        assistant_content: str,
+        assistant_count_before_response: int,
+    ) -> None:
+        """Name a new chat after its first assistant response, for streamed and non-streamed chats."""
+        if assistant_count_before_response != 0:
+            return
+
+        try:
+            new_title = self._generate_title(user_content, assistant_content)
+            if new_title:
+                self.repo.update_title(conversation_id, new_title)
+        except Exception:
+            pass
 
     def _get_inspection_context(self, conversation_id: int) -> str:
         try:
@@ -292,7 +313,7 @@ class ChatService:
             provider = self.get_provider(provider_name)
             res = provider.chat_completion(
                 [{"role": "user", "content": prompt}],
-                model=model, max_tokens=100
+                model=model, max_tokens=150
             )
             match = re.search(r'\[.*\]', res.replace('\n', ''))
             if match:
@@ -301,36 +322,72 @@ class ChatService:
         except Exception:
             return ["Tell me more", "Show an example", "How do I test this?"]
 
-    def _generate_title(self, user_msg: str, ai_msg: str, provider_name: str, model: str) -> Optional[str]:
-        prompt = (
-            f"Generate a concise (2-4 words) title for a conversation starting with: "
-            f"'{user_msg[:100]}'. Return ONLY the title, no quotes."
-        )
-        try:
-            provider = self.get_provider(provider_name)
-            res = provider.chat_completion(
-                [{"role": "user", "content": prompt}],
-                model=model, max_tokens=20
-            )
-            return res.strip().strip('"').strip("'")
-        except Exception:
+    def _generate_title(self, user_msg: str, ai_msg: str) -> Optional[str]:
+        """Generate a readable title from the user's first message without an extra AI call."""
+        user_snippet = re.sub(r'\s+', ' ', (user_msg or '')[:240]).strip()
+        if not user_snippet:
             return None
+        
+        sentences = re.split(r'[.!?\n]', user_snippet)
+        first_phrase = sentences[0].strip() if sentences else ""
+        first_phrase = re.sub(r'[`*_#>\[\]{}()]+', '', first_phrase)
+        first_phrase = re.sub(r'\bhttps?://\S+', '', first_phrase).strip(' :-,')
+        
+        if first_phrase:
+            words = first_phrase.split()
+            meaningful_words = [w for w in words if len(w) > 2 and w.lower() not in 
+                              ['what', 'how', 'why', 'when', 'where', 'can', 'you', 'help', 'please', 'these', 'this']]
+            
+            if meaningful_words:
+                title = ' '.join(meaningful_words[:min(7, len(meaningful_words))]).strip(' :-,')
+                if 3 < len(title) <= 80:
+                    return title[:1].upper() + title[1:]
+        
+        return None
 
     def generate_summary(self, conversation_id: int):
+        """Generate a professional, meaningful summary of the entire conversation."""
         conv = self.repo.get_by_id(conversation_id)
         if not conv:
             return None
+        
         messages = self.repo.get_messages(conversation_id)
-        history_text = "\n".join([f"{m.role}: {m.content[:200]}" for m in messages])
-        prompt = f"Summarize this developer conversation in 2-3 concise sentences:\n\n{history_text}"
+        if len(messages) < 2:
+            return "No sufficient conversation to summarize."
+        
+        # Build complete conversation context
+        conversation_flow = []
+        for i, msg in enumerate(messages):
+            role = "Developer" if msg.role == "user" else "ByteBuddy"
+            # Include more context
+            content = msg.content[:500]
+            conversation_flow.append(f"{role}: {content}")
+        
+        flow_text = "\n\n".join(conversation_flow)
+        
+        prompt = (
+            f"Analyze this ENTIRE conversation and create a professional, concise summary (4-6 sentences) that explains:\n"
+            f"1. What the developer asked or needed (main goal)\n"
+            f"2. What ByteBuddy provided or explained (key solutions/advice)\n"
+            f"3. Any alternatives or considerations discussed\n"
+            f"4. The final outcome or takeaways\n\n"
+            f"Write it as a brief professional summary, not a transcript. Use simple, clear language.\n"
+            f"Focus on WHAT HAPPENED in the conversation, not just listing messages.\n\n"
+            f"Full Conversation:\n{flow_text}\n\n"
+            f"Professional Summary:"
+        )
+        
         try:
             provider = self.get_provider(conv.settings.provider)
             summary = provider.chat_completion(
                 [{"role": "user", "content": prompt}],
-                model=conv.settings.model, max_tokens=150
+                model=conv.settings.model, max_tokens=300
             )
-            conv.summary = summary
-            db.session.commit()
-            return summary
+            summary = summary.strip()
+            if summary:
+                conv.summary = summary
+                db.session.commit()
+                return summary
+            return None
         except Exception:
             return None

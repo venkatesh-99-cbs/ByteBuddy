@@ -28,15 +28,16 @@ export const conversationService = {
   streamMessage: async function* (id: number, content: string, files?: File[]) {
     let formData: FormData | undefined;
     if (files?.length) {
-      formData = new FormData();
-      formData.append('content', content);
-      files.forEach((file) => formData.append('files', file));
+      const uploadFormData = new FormData();
+      uploadFormData.append('content', content);
+      files.forEach((file) => uploadFormData.append('files', file));
+      formData = uploadFormData;
     }
 
     const response = await fetch(`/api/conversations/${id}/messages/stream`, {
       method: 'POST',
       headers: formData ? {} : { 'Content-Type': 'application/json' },
-      body: formData || JSON.stringify({ content }),
+      body: formData ? formData : JSON.stringify({ content }),
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

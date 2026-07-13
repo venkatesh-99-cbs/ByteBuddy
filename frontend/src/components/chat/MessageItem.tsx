@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Bot, Check, Copy, Pin, RotateCcw, User } from 'lucide-react';
+import { AlertCircle, Bot, Check, Copy, Pin, RotateCcw, User } from 'lucide-react';
 import type { Message } from '../../types';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
@@ -11,19 +11,41 @@ interface MessageItemProps {
   message: Message;
   onPin: (id: number, pin: boolean) => void;
   onRegenerate?: (id: number) => void;
+  onRetry?: (id: number) => void;
   canRegenerate?: boolean;
   isRegenerating?: boolean;
+  isRetrying?: boolean;
   animateTyping?: boolean;
   onTypingProgress?: () => void;
   onTypingComplete?: () => void;
 }
 
+const parseBackendTimestamp = (value: string) => {
+  if (!value) return new Date();
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+  return new Date(hasTimezone ? value : `${value}Z`);
+};
+
+const formatMessageTimestamp = (value: string) => {
+  const date = parseBackendTimestamp(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
+
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
   onPin,
   onRegenerate,
+  onRetry,
   canRegenerate = false,
   isRegenerating = false,
+  isRetrying = false,
   animateTyping = false,
   onTypingProgress,
   onTypingComplete,
@@ -98,155 +120,210 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   return (
     <div className={cn(
-      "py-6 px-4 md:px-8 flex",
-      !isAssistant ? "justify-end" : "justify-start"
+      "py-6 px-4 md:px-8 flex flex-col",
+      !isAssistant ? "items-end" : "items-start"
     )}>
-      <div className={cn(
-        "flex max-w-[94%] md:max-w-[86%] xl:max-w-[78%] gap-3",
-        !isAssistant ? "flex-row-reverse" : "flex-row"
-      )}>
-        <div className="shrink-0 mt-1">
-          <div className={cn(
-            "w-8 h-8 rounded-full flex items-center justify-center",
-            isAssistant ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground"
-          )}>
-            {isAssistant ? <Bot size={16} /> : <User size={16} />}
+      {message.failed && (
+        <div className="mb-4 w-full max-w-[94%] md:max-w-[86%] xl:max-w-[78%] bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 text-sm text-destructive flex items-start gap-3">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium">Response failed</p>
+            {message.error_message && (
+              <p className="text-xs opacity-80 mt-1">{message.error_message}</p>
+            )}
+            <div className="flex gap-2 mt-3">
+              {onRetry && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 px-3 bg-destructive/20 border-destructive/50 hover:bg-destructive/30 text-destructive"
+                  onClick={() => onRetry(message.id)}
+                  disabled={isRetrying}
+                >
+                  {isRetrying ? (
+                    <>
+                      <RotateCcw size={11} className="mr-1 animate-spin" />
+                      Retrying...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={11} className="mr-1" />
+                      Retry
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
-
+      )}
+      <div className={cn(
+        "flex",
+        !isAssistant ? "flex-row-reverse justify-end" : "flex-row justify-start"
+      )}>
         <div className={cn(
-          "group/message flex flex-col gap-1.5 min-w-0",
-          !isAssistant ? "items-end" : "items-start"
+          "flex max-w-[94%] md:max-w-[86%] xl:max-w-[78%] gap-3",
+          !isAssistant ? "flex-row-reverse" : "flex-row"
         )}>
-          <div className={cn(
-            "flex items-center gap-2 text-[11px] text-muted-foreground px-1",
-            !isAssistant ? "flex-row-reverse" : "flex-row"
-          )}>
-            <span className="font-medium text-foreground/80">{isAssistant ? 'ByteBuddy' : 'You'}</span>
-            <span>{new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).format(new Date(message.created_at))}</span>
-            {isAssistant && message.workflow_stage && (
-              <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase font-semibold text-[9px] tracking-wider">
-                {message.workflow_stage.replace('_', ' ')}
-              </span>
-            )}
-          </div>
-
-          <div className={cn(
-            "relative rounded-2xl px-5 py-3.5 shadow-sm overflow-hidden",
-            !isAssistant 
-              ? "bg-primary text-primary-foreground rounded-tr-sm" 
-              : "bg-card border rounded-tl-sm text-card-foreground"
-          )}>
+          <div className="shrink-0 mt-1">
             <div className={cn(
-              "prose max-w-none text-[14.5px] leading-relaxed break-words prose-headings:tracking-tight prose-li:my-0.5",
-              !isAssistant ? "prose-invert text-primary-foreground/95 prose-p:my-1" : "prose-slate dark:prose-invert prose-p:my-2 prose-pre:p-0 prose-pre:bg-transparent prose-strong:text-foreground"
+              "w-8 h-8 rounded-full flex items-center justify-center",
+              isAssistant ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground"
             )}>
-              <ReactMarkdown
-                components={{
-                  code({ inline, className, children, ...props }: any) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const code = String(children).replace(/\n$/, '');
-                    return !inline && match ? (
-                      <div className="relative group my-4 overflow-hidden rounded-lg border bg-[#101318]">
-                        <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
-                          <span className="text-[10px] uppercase font-medium text-white/50">{match[1]}</span>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-6 px-2 text-[10px] bg-white/10 text-white hover:bg-white/20"
-                            onClick={() => copyToClipboard(code, 'code')}
-                          >
-                            {copiedTarget === 'code' ? <Check size={10} className="mr-1" /> : <Copy size={10} className="mr-1" />}
-                            {copiedTarget === 'code' ? 'Copied' : 'Copy'}
-                          </Button>
-                        </div>
-                        <SyntaxHighlighter
-                          style={oneDark}
-                          language={match[1]}
-                          PreTag="div"
-                          customStyle={{ margin: 0, padding: '12px 16px', borderRadius: 0, background: 'transparent', fontSize: '13px' }}
-                          {...props}
-                        >
-                          {code}
-                        </SyntaxHighlighter>
-                      </div>
-                    ) : (
-                      <code className={cn("px-1.5 py-0.5 rounded-md text-[13px] font-mono", !isAssistant ? "bg-primary-foreground/20" : "bg-muted")} {...props}>
-                        {children}
-                      </code>
-                    );
-                  }
-                }}
-              >
-                {displayedContent}
-              </ReactMarkdown>
-              {isTyping && (
-                <span className="inline-block h-3 w-1.5 ml-1 translate-y-0.5 bg-current animate-pulse opacity-70" />
-              )}
+              {isAssistant ? <Bot size={16} /> : <User size={16} />}
             </div>
           </div>
 
           <div className={cn(
-            "flex items-center gap-1 px-1 opacity-100 sm:opacity-0 sm:group-hover/message:opacity-100 transition-opacity",
-            !isAssistant ? "justify-end" : "justify-start",
-            message.is_pinned && "sm:opacity-100"
+            "group/message flex flex-col gap-1.5 min-w-0",
+            !isAssistant ? "items-end" : "items-start"
           )}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground"
-              onClick={() => copyToClipboard(message.content, 'message')}
-              title="Copy message"
-            >
-              {copiedTarget === 'message' ? <Check size={12} /> : <Copy size={12} />}
-              {copiedTarget === 'message' ? 'Copied' : 'Copy'}
-            </Button>
-            {isAssistant && (
+            <div className={cn(
+              "flex items-center gap-2 text-[11px] text-muted-foreground px-1",
+              !isAssistant ? "flex-row-reverse" : "flex-row"
+            )}>
+              <span className="font-medium text-foreground/80">{isAssistant ? 'ByteBuddy' : 'You'}</span>
+              <span>{formatMessageTimestamp(message.created_at)}</span>
+              {isAssistant && message.workflow_stage && (
+                <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase font-semibold text-[9px] tracking-wider">
+                  {message.workflow_stage.replace('_', ' ')}
+                </span>
+              )}
+            </div>
+
+            <div className={cn(
+              "relative rounded-2xl px-5 py-3.5 shadow-sm overflow-hidden",
+              !isAssistant 
+                ? "bg-primary text-primary-foreground rounded-tr-sm" 
+                : "bg-card border rounded-tl-sm text-card-foreground"
+            )}>
+              <div className={cn(
+                "prose max-w-none text-[14.5px] leading-relaxed break-words prose-headings:tracking-tight prose-li:my-0.5",
+                !isAssistant ? "prose-invert text-primary-foreground/95 prose-p:my-1" : "prose-slate dark:prose-invert prose-p:my-2 prose-pre:p-0 prose-pre:bg-transparent prose-strong:text-foreground"
+              )}>
+                <ReactMarkdown
+                  components={{
+                    code({ inline, className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      const code = String(children).replace(/\n$/, '');
+                      return !inline && match ? (
+                        <div className="relative group my-4 overflow-hidden rounded-lg border bg-[#101318]">
+                          <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
+                            <span className="text-[10px] uppercase font-medium text-white/50">{match[1]}</span>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] bg-white/10 text-white hover:bg-white/20"
+                              onClick={() => copyToClipboard(code, 'code')}
+                            >
+                              {copiedTarget === 'code' ? <Check size={10} className="mr-1" /> : <Copy size={10} className="mr-1" />}
+                              {copiedTarget === 'code' ? 'Copied' : 'Copy'}
+                            </Button>
+                          </div>
+                          <SyntaxHighlighter
+                            style={oneDark}
+                            language={match[1]}
+                            PreTag="div"
+                            customStyle={{ margin: 0, padding: '12px 16px', borderRadius: 0, background: 'transparent', fontSize: '13px' }}
+                            {...props}
+                          >
+                            {code}
+                          </SyntaxHighlighter>
+                        </div>
+                      ) : (
+                        <code className={cn("px-1.5 py-0.5 rounded-md text-[13px] font-mono", !isAssistant ? "bg-primary-foreground/20" : "bg-muted")} {...props}>
+                          {children}
+                        </code>
+                      );
+                    }
+                  }}
+                >
+                  {displayedContent}
+                </ReactMarkdown>
+                {isTyping && (
+                  <span className="inline-block h-3 w-1.5 ml-1 translate-y-0.5 bg-current animate-pulse opacity-70" />
+                )}
+              </div>
+            </div>
+
+            <div className={cn(
+              "flex items-center gap-1 px-1 opacity-100 sm:opacity-0 sm:group-hover/message:opacity-100 transition-opacity",
+              !isAssistant ? "justify-end" : "justify-start",
+              message.is_pinned && "sm:opacity-100"
+            )}>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground"
-                onClick={() => onRegenerate?.(message.id)}
-                disabled={!canRegenerate || isTyping || isRegenerating}
-                title="Retry response"
+                onClick={() => copyToClipboard(message.content, 'message')}
+                title="Copy message"
               >
-                <RotateCcw size={12} className={cn(isRegenerating && "animate-spin")} />
-                Retry
+                {copiedTarget === 'message' ? <Check size={12} /> : <Copy size={12} />}
+                {copiedTarget === 'message' ? 'Copied' : 'Copy'}
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground",
-                message.is_pinned && "text-primary"
+              {isAssistant && (
+                <>
+                  {message.failed && onRetry ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground hover:text-destructive"
+                      onClick={() => onRetry(message.id)}
+                      disabled={isRetrying}
+                      title="Retry failed response"
+                    >
+                      <RotateCcw size={12} className={cn(isRetrying && "animate-spin")} />
+                      {isRetrying ? 'Retrying' : 'Retry'}
+                    </Button>
+                  ) : !message.failed ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => onRegenerate?.(message.id)}
+                      disabled={!canRegenerate || isTyping || isRegenerating}
+                      title={canRegenerate ? "Regenerate response" : "Only the latest assistant response can be regenerated"}
+                    >
+                      <RotateCcw size={12} className={cn(isRegenerating && "animate-spin")} />
+                      {isRegenerating ? 'Regenerating' : 'Regenerate'}
+                    </Button>
+                  ) : null}
+                </>
               )}
-              onClick={() => onPin(message.id, !message.is_pinned)}
-              title={message.is_pinned ? 'Unpin message' : 'Pin message'}
-            >
-              <Pin size={12} className={message.is_pinned ? "fill-current" : ""} />
-              {message.is_pinned ? 'Pinned' : 'Pin'}
-            </Button>
-          </div>
-
-          {isAssistant && !isTyping && message.suggestions && message.suggestions.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5 max-w-full">
-              {message.suggestions.map((suggestion, i) => (
-                <Button
-                  key={i}
-                  variant="outline"
-                  size="sm"
-                  className="text-[11px] h-7 px-3 rounded-full border-border hover:bg-muted/50 bg-background text-muted-foreground whitespace-normal text-left max-w-full h-auto py-1.5"
-                  onClick={() => {
-                    const event = new CustomEvent('suggestion-click', { detail: suggestion });
-                    window.dispatchEvent(event);
-                  }}
-                >
-                  {suggestion}
-                </Button>
-              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-7 px-2 rounded-md text-[11px] gap-1 text-muted-foreground hover:text-foreground",
+                  message.is_pinned && "text-primary"
+                )}
+                onClick={() => onPin(message.id, !message.is_pinned)}
+                title={message.is_pinned ? 'Unpin message' : 'Pin message'}
+              >
+                <Pin size={12} className={message.is_pinned ? "fill-current" : ""} />
+                {message.is_pinned ? 'Pinned' : 'Pin'}
+              </Button>
             </div>
-          )}
+
+            {isAssistant && !isTyping && message.suggestions && message.suggestions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5 max-w-full">
+                {message.suggestions.map((suggestion, i) => (
+                  <Button
+                    key={i}
+                    variant="outline"
+                    size="sm"
+                    className="text-[11px] h-7 px-3 rounded-full border-border hover:bg-muted/50 bg-background text-muted-foreground whitespace-normal text-left max-w-full h-auto py-1.5"
+                    onClick={() => {
+                      const event = new CustomEvent('suggestion-click', { detail: suggestion });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

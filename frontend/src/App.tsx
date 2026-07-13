@@ -13,7 +13,7 @@ import { WorkflowRecommendation } from './components/workflow/WorkflowRecommenda
 import { InspectorView } from './components/inspector/InspectorView';
 import { useWorkflow } from './hooks/useWorkflow';
 import type { ConversationSettings, WorkflowStage, Message } from './types';
-import { AlertCircle, Brain, FileSearch, PenLine } from 'lucide-react';
+import { AlertCircle, Brain, FileSearch } from 'lucide-react';
 
 const getErrorMessage = (error: unknown) => {
   if (!error || typeof error !== 'object') return undefined;
@@ -34,6 +34,7 @@ function App() {
   const [isApiKeyPromptOpen, setIsApiKeyPromptOpen] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | undefined>();
   const [apiKeyPromptSkipped, setApiKeyPromptSkipped] = useState(false);
+  const [regenerateMessageId, setRegenerateMessageId] = useState<number | undefined>();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('bytebuddy-theme');
     if (stored === 'light' || stored === 'dark') return stored;
@@ -122,6 +123,23 @@ function App() {
     }
   });
 
+  const regenerateMutation = useMutation({
+    mutationFn: (messageId: number) => {
+      if (!activeId) throw new Error('No active conversation');
+      return conversationService.regenerateMessage(activeId, messageId);
+    },
+    onMutate: (messageId) => {
+      setRegenerateMessageId(messageId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onSettled: () => {
+      setRegenerateMessageId(undefined);
+    },
+  });
+
   const settingsMutation = useMutation({
     mutationFn: (newSettings: Partial<ConversationSettings>) => conversationService.updateSettings(activeId!, newSettings),
     onSuccess: () => {
@@ -198,6 +216,11 @@ function App() {
     }
   };
 
+  const handleRegenerateMessage = (messageId: number) => {
+    if (!activeId || isStreaming || regenerateMutation.isPending) return;
+    regenerateMutation.mutate(messageId);
+  };
+
   const handleStageSelect = (stage: WorkflowStage) => {
     if (activeId) {
       updateState({ current_stage: stage });
@@ -251,7 +274,8 @@ function App() {
       ? getErrorMessage(ollamaModelsError)
       : getErrorMessage(openRouterModelsError);
   
-  const latestAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
+  const visibleMessages = messages.filter(m => !workflow || !m.workflow_stage || m.workflow_stage === workflow.current_stage);
+  const latestAssistantMessageId = [...visibleMessages].reverse().find((message) => message.role === 'assistant')?.id;
   const currentStageLabel = stages.find((stage) => stage.id === workflow?.current_stage)?.label || 'Normal Chat';
 
   return (
@@ -294,10 +318,10 @@ function App() {
             isGenerating={isStreaming}
             typingMessageId={streamingMessage?.id ?? null}
             latestAssistantMessageId={latestAssistantMessageId}
-            regenerateMessageId={undefined}
+            regenerateMessageId={regenerateMessageId}
             onSendMessage={handleSendMessage}
             onPinMessage={(id, pin) => pinMutation.mutate({ id, pin })}
-            onRegenerateMessage={() => {}}
+            onRegenerateMessage={handleRegenerateMessage}
             onTypingProgress={scrollToBottom}
             onTypingComplete={() => {}}
           />
@@ -316,14 +340,14 @@ function App() {
                   />
                 )}
               
-                {messages.filter(m => !workflow || !m.workflow_stage || m.workflow_stage === workflow.current_stage).map((msg) => (
+                {visibleMessages.map((msg) => (
                   <MessageItem
                     key={msg.id}
                     message={msg}
                     onPin={(id, pin) => pinMutation.mutate({ id, pin })}
-                    onRegenerate={() => {}}
-                    canRegenerate={false}
-                    isRegenerating={false}
+                    onRegenerate={handleRegenerateMessage}
+                    canRegenerate={msg.id === latestAssistantMessageId && !isStreaming && !regenerateMutation.isPending}
+                    isRegenerating={regenerateMessageId === msg.id}
                     animateTyping={false}
                     onTypingProgress={scrollToBottom}
                     onTypingComplete={() => {}}

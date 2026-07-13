@@ -1,5 +1,5 @@
 from datetime import datetime
-from backend.app import db
+from app import db
 import json
 
 
@@ -8,6 +8,8 @@ class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False, default='New Conversation')
     summary = db.Column(db.Text, nullable=True)
+    title_ai_generated = db.Column(db.Boolean, default=False)
+    last_message_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -22,11 +24,15 @@ class Message(db.Model):
     __tablename__ = 'messages'
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False)
-    role = db.Column(db.String(50), nullable=False)  # 'user' or 'assistant'
+    role = db.Column(db.String(50), nullable=False)
     content = db.Column(db.Text, nullable=False)
     is_pinned = db.Column(db.Boolean, default=False)
     suggestions = db.Column(db.JSON, nullable=True)
-    workflow_stage = db.Column(db.String(50), nullable=True)  # which stage generated this message
+    workflow_stage = db.Column(db.String(50), nullable=True)
+    failed = db.Column(db.Boolean, default=False)
+    error_message = db.Column(db.Text, nullable=True)
+    retry_count = db.Column(db.Integer, default=0)
+    failed_context = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -47,10 +53,6 @@ class AppSettings(db.Model):
     key = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.Text)
 
-
-# ──────────────────────────────────────────────
-# Workflow Models
-# ──────────────────────────────────────────────
 
 WORKFLOW_STAGES = [
     'normal',
@@ -84,9 +86,9 @@ class WorkflowState(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False, unique=True)
     current_stage = db.Column(db.String(50), default='planning')
-    completed_stages_json = db.Column(db.Text, default='[]')  # JSON array
+    completed_stages_json = db.Column(db.Text, default='[]')
     project_name = db.Column(db.String(255), nullable=True)
-    tech_stack = db.Column(db.Text, nullable=True)  # JSON
+    tech_stack = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -107,7 +109,6 @@ class WorkflowState(db.Model):
         return set(project_stages).issubset(set(self.completed_stages))
 
     def next_stage(self):
-        """Return the next recommended stage, or None if all complete."""
         for stage in [stage for stage in WORKFLOW_STAGES if stage != 'normal']:
             if stage not in self.completed_stages:
                 return stage
@@ -137,7 +138,7 @@ class WorkflowArtifact(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False)
     stage = db.Column(db.String(50), nullable=False)
-    artifact_type = db.Column(db.String(50), nullable=False)  # e.g. 'requirements', 'schema', 'code', 'report'
+    artifact_type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=True)
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -154,15 +155,11 @@ class WorkflowArtifact(db.Model):
         }
 
 
-# ──────────────────────────────────────────────
-# Code Inspector Models
-# ──────────────────────────────────────────────
-
 class InspectionReport(db.Model):
     __tablename__ = 'inspection_reports'
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False)
-    status = db.Column(db.String(30), default='pending')  # pending, analyzing, completed, failed
+    status = db.Column(db.String(30), default='pending')
     overall_health = db.Column(db.Float, nullable=True)
     security_score = db.Column(db.Float, nullable=True)
     maintainability_score = db.Column(db.Float, nullable=True)
@@ -171,11 +168,11 @@ class InspectionReport(db.Model):
     documentation_score = db.Column(db.Float, nullable=True)
     files_scanned = db.Column(db.Integer, default=0)
     languages_json = db.Column(db.Text, default='[]')
-    analysis_duration = db.Column(db.Float, nullable=True)  # seconds
+    analysis_duration = db.Column(db.Float, nullable=True)
     ai_provider = db.Column(db.String(50), nullable=True)
     ai_model = db.Column(db.String(100), nullable=True)
     summary = db.Column(db.Text, nullable=True)
-    improvements_json = db.Column(db.Text, default='[]')  # prioritized roadmap
+    improvements_json = db.Column(db.Text, default='[]')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     files = db.relationship('InspectionFile', backref='report', lazy=True, cascade="all, delete-orphan")
@@ -236,7 +233,7 @@ class InspectionFile(db.Model):
     __tablename__ = 'inspection_files'
     id = db.Column(db.Integer, primary_key=True)
     report_id = db.Column(db.Integer, db.ForeignKey('inspection_reports.id'), nullable=False)
-    file_path = db.Column(db.String(500), nullable=False)  # relative path in uploaded project
+    file_path = db.Column(db.String(500), nullable=False)
     language = db.Column(db.String(50), nullable=True)
     content = db.Column(db.Text, nullable=True)
     size_bytes = db.Column(db.Integer, default=0)
@@ -258,8 +255,8 @@ class InspectionFinding(db.Model):
     __tablename__ = 'inspection_findings'
     id = db.Column(db.Integer, primary_key=True)
     report_id = db.Column(db.Integer, db.ForeignKey('inspection_reports.id'), nullable=False)
-    severity = db.Column(db.String(20), nullable=False)  # critical, high, medium, low, info
-    category = db.Column(db.String(50), nullable=False)  # bug, security, performance, quality, etc.
+    severity = db.Column(db.String(20), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=True)
     line_number = db.Column(db.Integer, nullable=True)
@@ -268,7 +265,7 @@ class InspectionFinding(db.Model):
     why_it_matters = db.Column(db.Text, nullable=True)
     suggested_fix = db.Column(db.Text, nullable=True)
     improved_code = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(20), default='open')  # open, resolved, ignored
+    status = db.Column(db.String(20), default='open')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
