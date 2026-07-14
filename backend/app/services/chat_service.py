@@ -365,9 +365,9 @@ class ChatService:
                     return title[:1].upper() + title[1:]
 
         # Last fallback: trim the raw snippet to 60 chars at a word boundary
-        if len(user_snippet) > 5:
+        if len(user_snippet) > 1:
             trimmed = user_snippet[:60].rsplit(' ', 1)[0].strip(' :-,')
-            if len(trimmed) > 3:
+            if len(trimmed) > 1:
                 return trimmed[:1].upper() + trimmed[1:]
 
         return None

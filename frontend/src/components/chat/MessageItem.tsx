@@ -124,7 +124,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       !isAssistant ? "items-end" : "items-start"
     )}>
       {message.failed && (
-        <div className="mb-4 w-full max-w-[94%] md:max-w-[86%] xl:max-w-[78%] bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 text-sm text-destructive flex items-start gap-3">
+        <div className="mb-4 w-full max-w-full md:max-w-[95%] xl:max-w-[92%] bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 text-sm text-destructive flex items-start gap-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="font-medium">Response failed</p>
@@ -162,7 +162,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         !isAssistant ? "flex-row-reverse justify-end" : "flex-row justify-start"
       )}>
         <div className={cn(
-          "flex max-w-[94%] md:max-w-[86%] xl:max-w-[78%] gap-3",
+          "flex max-w-full md:max-w-[95%] xl:max-w-[92%] gap-3",
           !isAssistant ? "flex-row-reverse" : "flex-row"
         )}>
           <div className="shrink-0 mt-1">

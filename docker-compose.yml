@@ -6,7 +6,7 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - ./instance:/app/instance
+      - ./backend/instance:/app/instance
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
